@@ -1,6 +1,6 @@
 {
-  "name": "System Console",
-  "description": "Android 15 Native Platform, Google Play Services Integration, Background Task Sync, and Developer Performance Tuning Toolbox.",
+  "name": "Android 16 Emulator",
+  "description": "Android 16 Baklava Platform Simulator with preinstalled applications, dialer, messaging, camera, clock, calculator, Gemini AI, developer tools, and full gesture-friendly system navigation.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

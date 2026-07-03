@@ -152,7 +152,13 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     private val _emulatedNotificationDrawerOpen = MutableStateFlow(false)
     val emulatedNotificationDrawerOpen: StateFlow<Boolean> = _emulatedNotificationDrawerOpen.asStateFlow()
 
-    private val _emulatedInstalledApps = MutableStateFlow<List<String>>(listOf("Diagnostics", "Settings", "Chrome", "GitHub", "Play Store"))
+    private val _emulatedInstalledApps = MutableStateFlow<List<String>>(
+        listOf(
+            "Diagnostics", "Settings", "Chrome", "GitHub", "Play Store",
+            "Play Services Status", "WorkManager Logs", "Dev Toggles",
+            "Dialer", "Messages", "Camera", "Calculator", "Clock", "Gemini AI"
+        )
+    )
     val emulatedInstalledApps: StateFlow<List<String>> = _emulatedInstalledApps.asStateFlow()
 
     private val _emulatedBrowserUrl = MutableStateFlow("https://google.com")

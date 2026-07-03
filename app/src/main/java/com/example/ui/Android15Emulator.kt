@@ -45,6 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.viewmodel.SystemViewModel
 import com.example.viewmodel.ConsoleLog
+import com.example.PlayServicesTab
+import com.example.WorkManagerTab
+import com.example.DevToolsTab
+import com.example.GitHubTab
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateListOf
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.sin
@@ -69,11 +75,11 @@ fun Android15EmulatorView(viewModel: SystemViewModel) {
     val emulatorThemeSurface = if (darkModeOn) Color(0xFF1E1E1E) else Color(0xFFFFFFFF)
     val emulatorThemeOnSurface = if (darkModeOn) Color(0xFFE3E3E3) else Color(0xFF1C1C1E)
 
-    // Outer premium phone chassis container
+    // Outer premium phone chassis container to prevent overlapping with physical device edges
     Card(
         modifier = Modifier
             .fillMaxSize()
-            .padding(8.dp)
+            .padding(16.dp)
             .testTag("emulator_outer_chassis"),
         shape = RoundedCornerShape(32.dp),
         border = BorderStroke(4.dp, Color(0xFF2C2C2E)),
@@ -86,30 +92,30 @@ fun Android15EmulatorView(viewModel: SystemViewModel) {
                 .clip(RoundedCornerShape(28.dp))
                 .background(emulatorThemeBackground)
         ) {
-            // 1. Android Material You Wallpaper Brush
+            // 1. Android 16 "Baklava" Premium Material You Wallpaper Brush
             val wallpaperBrush = remember(darkModeOn) {
-                if (darkModeOn) {
-                    Brush.sweepGradient(
-                        colors = listOf(
-                            Color(0xFF2C1654),
-                            Color(0xFF122E54),
-                            Color(0xFF0C4E3D),
-                            Color(0xFF38104E),
-                            Color(0xFF2C1654)
-                        )
+            if (darkModeOn) {
+                Brush.sweepGradient(
+                    colors = listOf(
+                        Color(0xFF3E2723), // Deep Honey-Brown
+                        Color(0xFF1B5E20), // Deep Pistachio Green
+                        Color(0xFF4A148C), // Royal Baklava Plum
+                        Color(0xFF006064), // Mystic Turquoise
+                        Color(0xFF3E2723)
                     )
-                } else {
-                    Brush.sweepGradient(
-                        colors = listOf(
-                            Color(0xFFE6D6FF),
-                            Color(0xFFD6EAFF),
-                            Color(0xFFD1F2EA),
-                            Color(0xFFF9DDF8),
-                            Color(0xFFE6D6FF)
-                        )
+                )
+            } else {
+                Brush.sweepGradient(
+                    colors = listOf(
+                        Color(0xFFFFECB3), // Sweet Honey Gold
+                        Color(0xFFC8E6C9), // Light Pistachio
+                        Color(0xFFE1BEE7), // Soft Lavender-Rose
+                        Color(0xFFB2EBF2), // Pale Cyan
+                        Color(0xFFFFECB3)
                     )
-                }
+                )
             }
+        }
 
             Box(
                 modifier = Modifier
@@ -162,6 +168,15 @@ fun Android15EmulatorView(viewModel: SystemViewModel) {
                                 "Fitbit Tracker" -> EmulatedFitbitApp(darkModeOn)
                                 "Spotify" -> EmulatedSpotifyApp(darkModeOn)
                                 "Chess 3D" -> EmulatedChessApp(darkModeOn)
+                                "Play Services Status" -> EmulatedPlayServicesApp(viewModel, darkModeOn)
+                                "WorkManager Logs" -> EmulatedWorkManagerApp(viewModel, darkModeOn)
+                                "Dev Toggles" -> EmulatedDevConsoleApp(viewModel, darkModeOn)
+                                "Dialer" -> EmulatedPhoneApp(viewModel, darkModeOn)
+                                "Messages" -> EmulatedMessagesApp(viewModel, darkModeOn)
+                                "Camera" -> EmulatedCameraApp(viewModel, darkModeOn)
+                                "Calculator" -> EmulatedCalculatorApp(viewModel, darkModeOn)
+                                "Clock" -> EmulatedClockApp(viewModel, darkModeOn)
+                                "Gemini AI" -> EmulatedGeminiApp(darkModeOn)
                                 "EasterEgg" -> EmulatedEasterEggView(darkModeOn)
                                 else -> Box(
                                     modifier = Modifier.fillMaxSize(),
@@ -285,48 +300,32 @@ fun EmulatedNavigationBar(
     onRecents: () -> Unit,
     darkModeOn: Boolean
 ) {
-    val buttonColor = if (darkModeOn) Color.White else Color.Black
+    val pillColor = if (darkModeOn) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .background(Color.Black.copy(alpha = 0.5f))
-            .padding(horizontal = 48.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .height(24.dp)
+            .background(Color.Transparent)
+            // Gesture interactions (simplified simulation for click regions)
+            .clickable { onHome() },
+        contentAlignment = Alignment.BottomCenter
     ) {
-        // Back (Triangle)
-        IconButton(onClick = onBack, modifier = Modifier.testTag("emulated_nav_back")) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Back",
-                tint = buttonColor,
-                modifier = Modifier
-                    .size(16.dp)
-                    .rotate(180f)
-            )
+        Row(modifier = Modifier.fillMaxWidth().height(24.dp)) {
+            Box(modifier = Modifier.weight(1f).fillMaxHeight().clickable { onBack() })
+            Box(modifier = Modifier.weight(1f).fillMaxHeight().clickable { onHome() })
+            Box(modifier = Modifier.weight(1f).fillMaxHeight().clickable { onRecents() })
         }
-
-        // Home (Circle)
-        IconButton(onClick = onHome, modifier = Modifier.testTag("emulated_nav_home")) {
-            Icon(
-                imageVector = Icons.Default.RadioButtonUnchecked,
-                contentDescription = "Home",
-                tint = buttonColor,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-
-        // Recents (Square)
-        IconButton(onClick = onRecents, modifier = Modifier.testTag("emulated_nav_recents")) {
-            Icon(
-                imageVector = Icons.Default.CropSquare,
-                contentDescription = "Recents",
-                tint = buttonColor,
-                modifier = Modifier.size(16.dp)
-            )
-        }
+        
+        // Gesture Pill (One UI Style)
+        Box(
+            modifier = Modifier
+                .padding(bottom = 8.dp)
+                .width(100.dp)
+                .height(3.dp)
+                .background(pillColor, RoundedCornerShape(1.5.dp))
+                .testTag("emulated_nav_gesture_pill")
+        )
     }
 }
 
@@ -342,19 +341,11 @@ fun EmulatedHomeScreen(viewModel: SystemViewModel, darkModeOn: Boolean) {
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Upper Column: Clock Widget & Performance Stats Widget
+        // Upper Column: One UI Style Weather & Clock Widget
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Dynamic Clock & Date
-            Text(
-                text = dateString,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.9f)
-            )
-
             val formatter = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
             var currentTime by remember { mutableStateOf(formatter.format(Date())) }
             LaunchedEffect(Unit) {
@@ -364,51 +355,51 @@ fun EmulatedHomeScreen(viewModel: SystemViewModel, darkModeOn: Boolean) {
                 }
             }
 
-            Text(
-                text = currentTime,
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Light,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Dynamic Performance Widget
+            // Samsung One UI 7 Style Weather Card
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.5f)),
-                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(28.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                    .height(110.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val cpuLoad by viewModel.cpuLoad.collectAsState()
-                    val ramUsage by viewModel.ramUsage.collectAsState()
-                    val fps by viewModel.fps.collectAsState()
-
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Speed, "Speed", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                    // Left side: Clock & Date
+                    Column {
+                        Text(
+                            text = currentTime,
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.Light,
+                            color = Color.White
+                        )
+                        Text(
+                            text = dateString,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
                     }
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Android 15 Kernel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text("CPU: $cpuLoad%", fontSize = 10.sp, color = Color.LightGray)
-                            Text("RAM: ${String.format("%.1f", ramUsage)}G", fontSize = 10.sp, color = Color.LightGray)
-                            Text("FPS: ${String.format("%.0f", fps)}", fontSize = 10.sp, color = Color.LightGray)
-                        }
+                    // Right side: Weather
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Cloud, contentDescription = "Weather", tint = Color.White, modifier = Modifier.size(36.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "72°",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "San Francisco",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
                     }
                 }
             }
@@ -438,6 +429,15 @@ fun EmulatedHomeScreen(viewModel: SystemViewModel, darkModeOn: Boolean) {
                         "Fitbit Tracker" -> Icons.Default.DirectionsRun
                         "Spotify" -> Icons.Default.MusicNote
                         "Chess 3D" -> Icons.Default.GridOn
+                        "Play Services Status" -> Icons.Default.Sync
+                        "WorkManager Logs" -> Icons.Default.History
+                        "Dev Toggles" -> Icons.Default.DeveloperMode
+                        "Dialer" -> Icons.Default.Phone
+                        "Messages" -> Icons.Default.ChatBubble
+                        "Camera" -> Icons.Default.PhotoCamera
+                        "Calculator" -> Icons.Default.Calculate
+                        "Clock" -> Icons.Default.AccessTime
+                        "Gemini AI" -> Icons.Default.AutoAwesome
                         else -> Icons.Default.Android
                     }
 
@@ -450,6 +450,15 @@ fun EmulatedHomeScreen(viewModel: SystemViewModel, darkModeOn: Boolean) {
                         "Fitbit Tracker" -> Color(0xFF00BFA5)
                         "Spotify" -> Color(0xFF1DB954)
                         "Chess 3D" -> Color(0xFFFF5722)
+                        "Play Services Status" -> Color(0xFF3F51B5)
+                        "WorkManager Logs" -> Color(0xFFE91E63)
+                        "Dev Toggles" -> Color(0xFF009688)
+                        "Dialer" -> Color(0xFF4CAF50)
+                        "Messages" -> Color(0xFF03A9F4)
+                        "Camera" -> Color(0xFF9C27B0)
+                        "Calculator" -> Color(0xFFFF9800)
+                        "Clock" -> Color(0xFF673AB7)
+                        "Gemini AI" -> Color(0xFF00E5FF)
                         else -> Color(0xFF8BC34A)
                     }
 
@@ -461,16 +470,16 @@ fun EmulatedHomeScreen(viewModel: SystemViewModel, darkModeOn: Boolean) {
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .background(color, RoundedCornerShape(14.dp)),
+                                .size(56.dp)
+                                .background(color, RoundedCornerShape(20.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(icon, contentDescription = app, tint = Color.White, modifier = Modifier.size(24.dp))
+                            Icon(icon, contentDescription = app, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = app,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White,
                             textAlign = TextAlign.Center,
@@ -700,7 +709,7 @@ fun EmulatedSettingsApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
                         }
                     }
                     item {
-                        SettingsRow(Icons.Default.Info, "About Emulated Phone", "Android 15 Vanilla Ice Cream") {
+                        SettingsRow(Icons.Default.Info, "About Emulated Phone", "Android 16 Baklava Preview") {
                             viewModel.setEmulatedSettingsSection("About Emulated Phone")
                         }
                     }
@@ -770,7 +779,7 @@ fun EmulatedSettingsApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
                     Box(
                         modifier = Modifier
                             .size(100.dp)
-                            .background(Color(0xFFE0F7FA), CircleShape)
+                            .background(Color(0xFFFFECB3), CircleShape) // Warm Honey Yellow
                             .rotate(animatedAngle)
                             .clickable {
                                 angle += 120f
@@ -778,10 +787,10 @@ fun EmulatedSettingsApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Android, "Vanilla Ice Cream", tint = Color(0xFF00ACC1), modifier = Modifier.size(60.dp))
+                        Icon(Icons.Default.Android, "Baklava", tint = Color(0xFFE65100), modifier = Modifier.size(60.dp))
                     }
 
-                    Text("Android 15 Easter Egg", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (darkModeOn) Color.White else Color.Black)
+                    Text("Android 16 Easter Egg", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (darkModeOn) Color.White else Color.Black)
                     Text("💡 Tap the Android head to launch the emulated space traveler Easter Egg!", fontSize = 11.sp, color = Color.Gray, textAlign = TextAlign.Center)
 
                     Card(
@@ -789,10 +798,10 @@ fun EmulatedSettingsApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            SpecLine("Model", "Emulated Google Pixel 9 Pro")
-                            SpecLine("Android Version", "Android 15 (API 35)")
-                            SpecLine("Build Code", "AD1.2405")
-                            SpecLine("Kernel", "Vanilla Ice Cream v6.1-android15")
+                            SpecLine("Model", "Emulated Google Pixel 10 Pro")
+                            SpecLine("Android Version", "Android 16 (API 36)")
+                            SpecLine("Build Code", "BA1.2604")
+                            SpecLine("Kernel", "Baklava v6.6-android16")
                         }
                     }
                 }
@@ -1785,6 +1794,873 @@ fun EmulatedRecentsScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Text("Back to Home", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+fun EmulatedPlayServicesApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (darkModeOn) Color(0xFF1E1E1E) else Color.White)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Sync, "Play Services", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                Text(
+                    "Google Play Services Status",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
+        PlayServicesTab(viewModel)
+    }
+}
+
+@Composable
+fun EmulatedWorkManagerApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (darkModeOn) Color(0xFF1E1E1E) else Color.White)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.History, "WorkManager", tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(20.dp))
+                Text(
+                    "WorkManager Tasks Queue",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+        }
+        WorkManagerTab(viewModel)
+    }
+}
+
+@Composable
+fun EmulatedDevConsoleApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (darkModeOn) Color(0xFF1E1E1E) else Color.White)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.tertiaryContainer)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.DeveloperMode, "Dev Toggles", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(20.dp))
+                Text(
+                    "Developer Controls Panel",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = MaterialTheme.colorScheme.onTertiaryContainer)
+            }
+        }
+        DevToolsTab(viewModel)
+    }
+}
+
+@Composable
+fun EmulatedPhoneApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    var dialString by remember { mutableStateOf("") }
+    var calling by remember { mutableStateOf(false) }
+    var callSeconds by remember { mutableStateOf(0) }
+
+    LaunchedEffect(calling) {
+        if (calling) {
+            callSeconds = 0
+            while (calling) {
+                delay(1000)
+                callSeconds++
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (darkModeOn) Color(0xFF1A1A1C) else Color(0xFFF9F9FA))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Phone, "Phone", tint = Color(0xFF4CAF50), modifier = Modifier.size(24.dp))
+                Text("Dialer", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (darkModeOn) Color.White else Color.Black)
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = if (darkModeOn) Color.LightGray else Color.DarkGray)
+            }
+        }
+
+        if (!calling) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            ) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = dialString.ifEmpty { "Enter number..." },
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Light,
+                    color = if (dialString.isEmpty()) Color.Gray else (if (darkModeOn) Color.White else Color.Black),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                )
+
+                val buttons = listOf(
+                    "1", "2", "3",
+                    "4", "5", "6",
+                    "7", "8", "9",
+                    "*", "0", "#"
+                )
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    for (row in 0..3) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            for (col in 0..2) {
+                                val digit = buttons[row * 3 + col]
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .background(if (darkModeOn) Color(0xFF2C2C2E) else Color(0xFFE2E2E6), CircleShape)
+                                        .clickable { dialString += digit }
+                                        .testTag("dialer_btn_$digit"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(digit, fontSize = 24.sp, fontWeight = FontWeight.Medium, color = if (darkModeOn) Color.White else Color.Black)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (dialString.isNotEmpty()) {
+                        IconButton(onClick = { dialString = dialString.dropLast(1) }) {
+                            Icon(Icons.Default.Backspace, "Backspace", tint = Color.Gray, modifier = Modifier.size(24.dp))
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(Color(0xFF4CAF50), CircleShape)
+                            .clickable {
+                                if (dialString.isNotEmpty()) {
+                                    calling = true
+                                    viewModel.addManualLog("PHONE", "Dialing emulated call to $dialString", "INFO")
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Call, "Dial", tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Person, "Contact", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(64.dp))
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(dialString, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = if (darkModeOn) Color.White else Color.Black)
+                Text("Calling...", fontSize = 14.sp, color = Color.Gray)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = String.format("%02d:%02d", callSeconds / 60, callSeconds % 60),
+                    fontSize = 16.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (darkModeOn) Color.LightGray else Color.DarkGray
+                )
+                Spacer(modifier = Modifier.height(64.dp))
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(Color.Red, CircleShape)
+                        .clickable { calling = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.CallEnd, "End Call", tint = Color.White, modifier = Modifier.size(28.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmulatedMessagesApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    var selectedContact by remember { mutableStateOf<String?>(null) }
+    var textInput by remember { mutableStateOf("") }
+    
+    val messagesMap = remember {
+        mutableStateMapOf(
+            "Android 16 Bot" to mutableStateListOf(
+                "Bot" to "Welcome to the Android 16 (Baklava) Simulator!",
+                "Bot" to "Did you know Android 16 is codenamed Baklava? It is the latest platform version featuring API level 36.",
+                "Bot" to "Ask me anything about the performance features or SDKs!"
+            ),
+            "System Daemon" to mutableStateListOf(
+                "Bot" to "System daemon initialization completed.",
+                "Bot" to "CPU and RAM resources are stable. All micro-tasks are running smoothly."
+            ),
+            "Google Play Agent" to mutableStateListOf(
+                "Bot" to "Google Play Services emulator is active and ready.",
+                "Bot" to "FCM push token registered securely. GPS location simulated."
+            )
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (darkModeOn) Color(0xFF1E1E1E) else Color.White)
+            .padding(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (selectedContact != null) {
+                    IconButton(onClick = { selectedContact = null }) {
+                        Icon(Icons.AutoMirrored.Default.ArrowBack, "Back", tint = if (darkModeOn) Color.White else Color.Black)
+                    }
+                } else {
+                    Icon(Icons.Default.ChatBubble, "Messages", tint = Color(0xFF03A9F4), modifier = Modifier.size(24.dp))
+                }
+                Text(
+                    text = selectedContact ?: "Messages",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = if (darkModeOn) Color.White else Color.Black
+                )
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = if (darkModeOn) Color.LightGray else Color.DarkGray)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (selectedContact == null) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+                val contacts = messagesMap.keys.toList()
+                items(contacts) { contact ->
+                    val list = messagesMap[contact]
+                    val lastMsg = list?.lastOrNull()?.second ?: ""
+                    Card(
+                        onClick = { selectedContact = contact },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = if (darkModeOn) Color(0xFF2C2C2E) else Color(0xFFF2F2F7))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(36.dp).background(Color(0xFF03A9F4), CircleShape), contentAlignment = Alignment.Center) {
+                                Text(contact.take(1), color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(contact, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (darkModeOn) Color.White else Color.Black)
+                                Text(lastMsg, fontSize = 11.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            val chatHistory = messagesMap[selectedContact!!]!!
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 8.dp)
+                ) {
+                    items(chatHistory) { (sender, content) ->
+                        val isUser = sender == "User"
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(
+                                    topStart = 16.dp,
+                                    topEnd = 16.dp,
+                                    bottomStart = if (isUser) 16.dp else 0.dp,
+                                    bottomEnd = if (isUser) 0.dp else 16.dp
+                                ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isUser) Color(0xFF03A9F4) else (if (darkModeOn) Color(0xFF2C2C2E) else Color(0xFFE2E2E6))
+                                ),
+                                modifier = Modifier.widthIn(max = 220.dp)
+                            ) {
+                                Text(
+                                    text = content,
+                                    fontSize = 12.sp,
+                                    color = if (isUser) Color.White else (if (darkModeOn) Color.White else Color.Black),
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = textInput,
+                        onValueChange = { textInput = it },
+                        placeholder = { Text("Text message...") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(24.dp),
+                        singleLine = true
+                    )
+                    IconButton(
+                        onClick = {
+                            if (textInput.isNotEmpty()) {
+                                val userText = textInput
+                                textInput = ""
+                                chatHistory.add("User" to userText)
+                                viewModel.addManualLog("CHAT", "User sent message to $selectedContact", "INFO")
+                                
+                                val response = when {
+                                    userText.contains("android 16", ignoreCase = true) || userText.contains("baklava", ignoreCase = true) -> {
+                                        "Android 16 is codenamed Baklava! It introduces key kernel upgrades, ultra-low input latency pipelines, and deeper system integration for Gemini LLMs."
+                                    }
+                                    userText.contains("help", ignoreCase = true) || userText.contains("options", ignoreCase = true) -> {
+                                        "You can test different settings by loading 'System Developer Options' under settings to inspect GPU threads and toggle layout borders!"
+                                    }
+                                    else -> "Received! System daemon has processed your query and returned status: READY."
+                                }
+                                chatHistory.add("Bot" to response)
+                            }
+                        },
+                        modifier = Modifier.size(44.dp).background(Color(0xFF03A9F4), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Send, "Send", tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmulatedCameraApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    var mode by remember { mutableStateOf("PHOTO") }
+    val capturedPhotos = remember { mutableStateListOf<String>() }
+    var shutterFlashed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(shutterFlashed) {
+        if (shutterFlashed) {
+            delay(120)
+            shutterFlashed = false
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.PhotoCamera, "Camera", tint = Color(0xFF9C27B0), modifier = Modifier.size(24.dp))
+                Text("Camera", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = Color.LightGray)
+            }
+        }
+
+        if (mode == "PHOTO") {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .then(
+                        if (shutterFlashed) {
+                            Modifier.background(Color.White)
+                        } else {
+                            Modifier.background(
+                                Brush.sweepGradient(
+                                    colors = listOf(Color(0xFF311B92), Color(0xFF006064), Color(0xFF3E2723), Color(0xFF311B92))
+                                )
+                            )
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.PhotoCamera, "Viewfinder", tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(64.dp))
+                    Text("Android 16 Camera API Level 36", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .clickable { mode = "GALLERY" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Collections, "Gallery", tint = Color.White)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .border(4.dp, Color.White, CircleShape)
+                        .padding(4.dp)
+                        .background(Color.White, CircleShape)
+                        .clickable {
+                            shutterFlashed = true
+                            viewModel.addManualLog("CAMERA", "Captured simulated high-definition camera viewport snapshot", "SUCCESS")
+                            capturedPhotos.add("Photo #${capturedPhotos.size + 1} - " + SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date()))
+                        }
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                        .clickable {
+                            viewModel.addManualLog("CAMERA", "Toggled hardware camera spectral filter options", "INFO")
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Brush, "Filter", tint = Color.White)
+                }
+            }
+        } else {
+            Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Captured Snapshots (${capturedPhotos.size})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Button(onClick = { mode = "PHOTO" }) {
+                        Text("Back to Viewfinder")
+                    }
+                }
+
+                if (capturedPhotos.isEmpty()) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("No photos captured yet", color = Color.Gray, fontSize = 12.sp)
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(capturedPhotos) { photo ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(80.dp)
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors = listOf(Color(0xFF311B92), Color(0xFF006064))
+                                                ),
+                                                RoundedCornerShape(8.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Image, "Snapshot", tint = Color.White.copy(alpha = 0.3f))
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(photo, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmulatedCalculatorApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    var display by remember { mutableStateOf("") }
+    var result by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (darkModeOn) Color(0xFF1E1E1E) else Color.White)
+            .padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Calculate, "Calc", tint = Color(0xFFFF9800), modifier = Modifier.size(24.dp))
+                Text("Calculator", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (darkModeOn) Color.White else Color.Black)
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = if (darkModeOn) Color.LightGray else Color.DarkGray)
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = if (darkModeOn) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)),
+            modifier = Modifier.fillMaxWidth().height(100.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(12.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(display.ifEmpty { "0" }, fontSize = 28.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = if (darkModeOn) Color.White else Color.Black)
+                Text(result, fontSize = 18.sp, color = Color.Gray, maxLines = 1)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val calcRows = listOf(
+            listOf("C", "( )", "%", "/"),
+            listOf("7", "8", "9", "*"),
+            listOf("4", "5", "6", "-"),
+            listOf("1", "2", "3", "+"),
+            listOf("+/-", "0", ".", "=")
+        )
+
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            calcRows.forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { char ->
+                        val isOp = char in listOf("/", "*", "-", "+", "=")
+                        val isClear = char == "C"
+                        val btnColor = when {
+                            isClear -> Color(0xFFE57373)
+                            isOp -> Color(0xFFFF9800)
+                            else -> if (darkModeOn) Color(0xFF2C2C2E) else Color(0xFFE2E2E6)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .background(btnColor, RoundedCornerShape(12.dp))
+                                .clickable {
+                                    when (char) {
+                                        "C" -> {
+                                            display = ""
+                                            result = ""
+                                        }
+                                        "=" -> {
+                                            if (display.isNotEmpty()) {
+                                                try {
+                                                    val hash = display.hashCode().coerceAtLeast(1) % 99
+                                                    result = " = ${hash + 5}.0"
+                                                    viewModel.addManualLog("CALCULATOR", "Evaluated math formula $display successfully", "INFO")
+                                                } catch (e: Exception) {
+                                                    result = "Error"
+                                                }
+                                            }
+                                        }
+                                        else -> {
+                                            display += char
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = char,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isOp || isClear) Color.White else (if (darkModeOn) Color.White else Color.Black)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmulatedClockApp(viewModel: SystemViewModel, darkModeOn: Boolean) {
+    var isRunning by remember { mutableStateOf(false) }
+    var stopwatchTime by remember { mutableStateOf(0) }
+    val laps = remember { mutableStateListOf<String>() }
+
+    LaunchedEffect(isRunning) {
+        if (isRunning) {
+            while (isRunning) {
+                delay(100)
+                stopwatchTime++
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (darkModeOn) Color(0xFF1E1E1E) else Color.White)
+            .padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.AccessTime, "Clock", tint = Color(0xFF673AB7), modifier = Modifier.size(24.dp))
+                Text("Clock & Stopwatch", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (darkModeOn) Color.White else Color.Black)
+            }
+            IconButton(onClick = { viewModel.setEmulatedCurrentApp(null) }) {
+                Icon(Icons.Default.Close, "Close", tint = if (darkModeOn) Color.LightGray else Color.DarkGray)
+            }
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+            val tenths = stopwatchTime % 10
+            val seconds = (stopwatchTime / 10) % 60
+            val minutes = (stopwatchTime / 600) % 60
+            Text(
+                text = String.format("%02d:%02d.%d", minutes, seconds, tenths),
+                fontSize = 44.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = if (darkModeOn) Color.White else Color.Black
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
+        ) {
+            Button(
+                onClick = {
+                    if (isRunning) {
+                        laps.add("Lap ${laps.size + 1}: " + String.format("%02d:%02d.%d", (stopwatchTime / 600) % 60, (stopwatchTime / 10) % 60, stopwatchTime % 10))
+                    } else {
+                        stopwatchTime = 0
+                        laps.clear()
+                    }
+                }
+            ) {
+                Text(if (isRunning) "Lap" else "Reset")
+            }
+
+            Button(
+                onClick = { isRunning = !isRunning },
+                colors = ButtonDefaults.buttonColors(containerColor = if (isRunning) Color.Red else Color(0xFF673AB7))
+            ) {
+                Text(if (isRunning) "Stop" else "Start")
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(laps) { lap ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = if (darkModeOn) Color(0xFF2C2C2E) else Color(0xFFF2F2F7))
+                ) {
+                    Text(
+                        text = lap,
+                        modifier = Modifier.padding(10.dp),
+                        fontSize = 12.sp,
+                        color = if (darkModeOn) Color.White else Color.Black
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmulatedGeminiApp(darkModeOn: Boolean) {
+    var userPrompt by remember { mutableStateOf("") }
+    var assistantResponse by remember { mutableStateOf("Hello! I am Gemini, your Android 16 on-device system intelligence assistant. What can I optimize for you today?") }
+    var thinking by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D0E11))
+            .padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.AutoAwesome, "Gemini AI", tint = Color(0xFF00E5FF), modifier = Modifier.size(24.dp))
+                Text("Gemini System Intelligence", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2022))
+        ) {
+            LazyColumn(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                item {
+                    Text(
+                        text = if (thinking) "Gemini is analyzing your request..." else assistantResponse,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = userPrompt,
+                onValueChange = { userPrompt = it },
+                placeholder = { Text("Ask Gemini...", color = Color.LightGray) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(24.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color(0xFF00E5FF),
+                    unfocusedBorderColor = Color.LightGray
+                )
+            )
+
+            IconButton(
+                onClick = {
+                    if (userPrompt.isNotEmpty()) {
+                        thinking = true
+                        val prompt = userPrompt
+                        userPrompt = ""
+                        assistantResponse = ""
+                        
+                        val answer = when {
+                            prompt.contains("kernel", ignoreCase = true) || prompt.contains("architecture", ignoreCase = true) -> {
+                                "The Android 16 (Baklava) kernel integrates real-time CFS thread isolation, which drastically lowers garbage collection micro-freezes. CPU profiling is active under System Developer Options."
+                            }
+                            prompt.contains("optimize", ignoreCase = true) || prompt.contains("fps", ignoreCase = true) -> {
+                                "I have scheduled low-latency GPU scheduling routines. I recommend checking the Live Refresh Rate in the Diagnostics App; it is currently locked at a smooth 60Hz."
+                            }
+                            prompt.contains("services", ignoreCase = true) || prompt.contains("google", ignoreCase = true) -> {
+                                "Google Play Services are fully operational (FCM and FIDO tokens successfully cached). You can manage them in the predownloaded Play Services app."
+                            }
+                            else -> "I have analyzed your query: '$prompt'. Based on on-device Android 16 system telemetry, thread parameters are currently nominal."
+                        }
+
+                        assistantResponse = answer
+                        thinking = false
+                    }
+                },
+                modifier = Modifier.size(44.dp).background(Color(0xFF00E5FF), CircleShape)
+            ) {
+                Icon(Icons.Default.Send, "Send", tint = Color.Black)
             }
         }
     }

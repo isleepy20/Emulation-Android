@@ -98,42 +98,11 @@ class MainActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .safeDrawingPadding() // Ensures no overlap with physical status or navigation bars
                         .background(MaterialTheme.colorScheme.background)
                         .testTag("app_root_container")
                 ) {
-                    Scaffold(
-                        modifier = Modifier.fillMaxSize(),
-                        bottomBar = {
-                            SystemBottomNavigation(systemViewModel)
-                        }
-                    ) { innerPadding ->
-                        val selectedTab by systemViewModel.selectedTab.collectAsState()
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding)
-                                .then(
-                                    if (layoutBoundaries) Modifier.border(1.5.dp, Color(0xFFE91E63)) else Modifier
-                                )
-                        ) {
-                            AnimatedContent(
-                                targetState = selectedTab,
-                                transitionSpec = {
-                                    fadeIn(animationSpec = tween(40)) togetherWith fadeOut(animationSpec = tween(40))
-                                },
-                                label = "TabNavigation"
-                            ) { tab ->
-                                when (tab) {
-                                    0 -> SystemStatusTab(systemViewModel)
-                                    1 -> PlayServicesTab(systemViewModel)
-                                    2 -> WorkManagerTab(systemViewModel)
-                                    3 -> DevToolsTab(systemViewModel)
-                                    4 -> GitHubTab(systemViewModel)
-                                }
-                            }
-                        }
-                    }
+                    Android15EmulatorView(systemViewModel)
 
                     // Optional GPU Profiling simulated overlay
                     if (gpuProfiling) {

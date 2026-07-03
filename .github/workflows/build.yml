@@ -22,10 +22,20 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Strip Custom Signing Rules
+    - name: Force Default Debug Signing Configuration
       run: |
-        # Completely strips signing block assignments to force the default local debug key fallback
-        sed -i '/signingConfig/d' app/build.gradle.kts || true
+        mkdir -p ~/.gradle
+        cat << 'EOF' > ~/.gradle/init.gradle
+        allprojects {
+            plugins.withId('com.android.application') {
+                android {
+                    buildTypes.all { type ->
+                        type.signingConfig = signingConfigs.debug
+                    }
+                }
+            }
+        }
+        EOF
 
     - name: Compile Debug APK
       run: gradle assembleDebug
@@ -34,6 +44,12 @@ jobs:
       run: |
         mkdir -p app/build/outputs/apk/custom/
         find app/build/outputs/apk/ -name "*.apk" -exec mv {} app/build/outputs/apk/custom/android-15.apk \;
+
+    - name: Upload Compiled APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-15-binary
+        path: app/build/outputs/apk/custom/android-15.apk
 
     - name: Upload Compiled APK
       uses: actions/upload-artifact@v4

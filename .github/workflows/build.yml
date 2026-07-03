@@ -22,12 +22,16 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Set Up Env and Mock Google Configuration
+    - name: Generate Dummy Keys and Google Config
       run: |
         touch .env
         touch .env.example
         
-        # Injects a valid mock structure to satisfy the com.google.gms.google-services parsing criteria
+        # 1. Generate the missing mock keystores required by your app/build.gradle.kts
+        keytool -genkey -v -keystore my-upload-key.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass "android" -keypass "android" -dname "CN=Mock, O=Mock, C=US"
+        keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass "android" -keypass "android" -dname "CN=Mock, O=Mock, C=US"
+        
+        # 2. Inject a valid mock structure to satisfy the Google Services plugin parsing requirements
         cat << 'EOF' > app/google-services.json
         {
           "project_info": {
@@ -61,10 +65,18 @@ jobs:
         EOF
 
     - name: Compile Application Binary
+      env:
+        STORE_PASSWORD: "android"
+        KEY_PASSWORD: "android"
       run: gradle assembleRelease
+
+    - name: Pack Output Artifact
+      run: |
+        mkdir -p app/build/outputs/apk/custom/
+        find app/build/outputs/apk/ -name "*.apk" -exec mv {} app/build/outputs/apk/custom/android-15.apk \;
 
     - name: Upload Compiled APK
       uses: actions/upload-artifact@v4
       with:
         name: android-15-binary
-        path: app/build/outputs/apk/release/android-15.apk
+        path: app/build/outputs/apk/custom/android-15.apk

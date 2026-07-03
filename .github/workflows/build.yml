@@ -22,37 +22,17 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Force Default Debug Signing Configuration
+    - name: Set Up Env and Dummy Google Configuration
       run: |
-        mkdir -p ~/.gradle
-        cat << 'EOF' > ~/.gradle/init.gradle
-        allprojects {
-            plugins.withId('com.android.application') {
-                android {
-                    buildTypes.all { type ->
-                        type.signingConfig = signingConfigs.debug
-                    }
-                }
-            }
-        }
-        EOF
+        touch .env
+        touch .env.example
+        echo '{}' > app/google-services.json
 
-    - name: Compile Debug APK
-      run: gradle assembleDebug
-
-    - name: Rename Output Binary
-      run: |
-        mkdir -p app/build/outputs/apk/custom/
-        find app/build/outputs/apk/ -name "*.apk" -exec mv {} app/build/outputs/apk/custom/android-15.apk \;
+    - name: Compile Application Binary
+      run: gradle assembleRelease
 
     - name: Upload Compiled APK
       uses: actions/upload-artifact@v4
       with:
         name: android-15-binary
-        path: app/build/outputs/apk/custom/android-15.apk
-
-    - name: Upload Compiled APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: android-15-binary
-        path: app/build/outputs/apk/custom/android-15.apk
+        path: app/build/outputs/apk/release/android-15.apk

@@ -22,20 +22,16 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Strip Signing Configuration
-      run: |
-        sed -i '/signingConfigs/,/^    }/d' app/build.gradle.kts || true
-        sed -i '/signingConfig/d' app/build.gradle.kts || true
-
-    - name: Compile Release APK
-      run: gradle assembleRelease
+    - name: Compile Debug APK
+      run: gradle assembleDebug
 
     - name: Rename Output Binary
       run: |
-        find app/build/outputs/apk/ -name "*.apk" -exec mv {} app/build/outputs/apk/android-15.apk \; 2>/dev/null || true
+        mkdir -p app/build/outputs/apk/custom/
+        find app/build/outputs/apk/ -name "*.apk" -exec mv {} app/build/outputs/apk/custom/android-15.apk \;
 
     - name: Upload Compiled APK
       uses: actions/upload-artifact@v4
       with:
         name: android-15-binary
-        path: app/build/outputs/apk/android-15.apk
+        path: app/build/outputs/apk/custom/android-15.apk

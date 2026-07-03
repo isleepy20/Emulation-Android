@@ -22,11 +22,43 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Set Up Env and Dummy Google Configuration
+    - name: Set Up Env and Mock Google Configuration
       run: |
         touch .env
         touch .env.example
-        echo '{}' > app/google-services.json
+        
+        # Injects a valid mock structure to satisfy the com.google.gms.google-services parsing criteria
+        cat << 'EOF' > app/google-services.json
+        {
+          "project_info": {
+            "project_number": "123456789012",
+            "project_id": "mock-project-id",
+            "storage_bucket": "mock-project-id.appspot.com"
+          },
+          "client": [
+            {
+              "client_info": {
+                "mobilesdk_app_id": "1:123456789012:android:mockapp123456",
+                "android_client_info": {
+                  "package_name": "com.aistudio.syshud.gbytw"
+                }
+              },
+              "oauth_client": [],
+              "api_key": [
+                {
+                  "current_key": "mock_api_key_for_github_compilation_pass"
+                }
+              ],
+              "services": {
+                "appinvite_service": {
+                  "status": 1
+                }
+              }
+            }
+          ],
+          "configuration_version": "1"
+        }
+        EOF
 
     - name: Compile Application Binary
       run: gradle assembleRelease

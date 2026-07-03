@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.database.JobLog
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.Android15EmulatorView
 import com.example.viewmodel.ConsoleLog
 import com.example.viewmodel.SystemViewModel
 import kotlinx.coroutines.delay
@@ -217,6 +218,65 @@ fun SystemBottomNavigation(viewModel: SystemViewModel) {
 // -------------------------------------------------------------
 @Composable
 fun SystemStatusTab(viewModel: SystemViewModel) {
+    var showEmulator by remember { mutableStateOf(true) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // High-fidelity Segmented Toggle at the top to switch modes
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Button(
+                onClick = { showEmulator = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (showEmulator) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    contentColor = if (showEmulator) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f).testTag("select_emulator_mode_btn")
+            ) {
+                Icon(Icons.Default.PhoneAndroid, contentDescription = "Emulator", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Android 15 Emulator", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+                onClick = { showEmulator = false },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (!showEmulator) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    contentColor = if (!showEmulator) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f).testTag("select_diagnostics_mode_btn")
+            ) {
+                Icon(Icons.Default.Analytics, contentDescription = "Diagnostics", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Performance Dash", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        AnimatedContent(
+            targetState = showEmulator,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
+            },
+            label = "EmulatorToggle"
+        ) { isEmulator ->
+            if (isEmulator) {
+                Android15EmulatorView(viewModel)
+            } else {
+                DiagnosticsDashboard(viewModel)
+            }
+        }
+    }
+}
+
+@Composable
+fun DiagnosticsDashboard(viewModel: SystemViewModel) {
     val fps by viewModel.fps.collectAsState()
     val fpsHistory by viewModel.fpsHistory.collectAsState()
     val cpuLoad by viewModel.cpuLoad.collectAsState()

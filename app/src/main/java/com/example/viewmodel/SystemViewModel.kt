@@ -127,6 +127,43 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     private val _downloadSuccessMessage = MutableStateFlow<String?>(null)
     val downloadSuccessMessage: StateFlow<String?> = _downloadSuccessMessage.asStateFlow()
 
+    // --- Android 15 Emulator States ---
+    private val _emulatedCurrentApp = MutableStateFlow<String?>(null)
+    val emulatedCurrentApp: StateFlow<String?> = _emulatedCurrentApp.asStateFlow()
+
+    private val _emulatedRecentApps = MutableStateFlow<List<String>>(emptyList())
+    val emulatedRecentApps: StateFlow<List<String>> = _emulatedRecentApps.asStateFlow()
+
+    private val _emulatedWifiOn = MutableStateFlow(true)
+    val emulatedWifiOn: StateFlow<Boolean> = _emulatedWifiOn.asStateFlow()
+
+    private val _emulatedBluetoothOn = MutableStateFlow(true)
+    val emulatedBluetoothOn: StateFlow<Boolean> = _emulatedBluetoothOn.asStateFlow()
+
+    private val _emulatedDarkModeOn = MutableStateFlow(true)
+    val emulatedDarkModeOn: StateFlow<Boolean> = _emulatedDarkModeOn.asStateFlow()
+
+    private val _emulatedFlashlightOn = MutableStateFlow(false)
+    val emulatedFlashlightOn: StateFlow<Boolean> = _emulatedFlashlightOn.asStateFlow()
+
+    private val _emulatedBatterySaverOn = MutableStateFlow(false)
+    val emulatedBatterySaverOn: StateFlow<Boolean> = _emulatedBatterySaverOn.asStateFlow()
+
+    private val _emulatedNotificationDrawerOpen = MutableStateFlow(false)
+    val emulatedNotificationDrawerOpen: StateFlow<Boolean> = _emulatedNotificationDrawerOpen.asStateFlow()
+
+    private val _emulatedInstalledApps = MutableStateFlow<List<String>>(listOf("Diagnostics", "Settings", "Chrome", "GitHub", "Play Store"))
+    val emulatedInstalledApps: StateFlow<List<String>> = _emulatedInstalledApps.asStateFlow()
+
+    private val _emulatedBrowserUrl = MutableStateFlow("https://google.com")
+    val emulatedBrowserUrl: StateFlow<String> = _emulatedBrowserUrl.asStateFlow()
+
+    private val _emulatedSettingsSection = MutableStateFlow("Main")
+    val emulatedSettingsSection: StateFlow<String> = _emulatedSettingsSection.asStateFlow()
+
+    private val _emulatedRecentsOpen = MutableStateFlow(false)
+    val emulatedRecentsOpen: StateFlow<Boolean> = _emulatedRecentsOpen.asStateFlow()
+
     // System constants
     val sdkVersion = Build.VERSION.SDK_INT
     val codename = Build.VERSION.CODENAME
@@ -608,6 +645,77 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         _downloadedApkFileUri.value = null
         _downloadSuccessMessage.value = null
         _downloadError.value = null
+    }
+
+    // --- Android 15 Emulator Controllers ---
+    fun setEmulatedCurrentApp(app: String?) {
+        _emulatedCurrentApp.value = app
+        if (app != null) {
+            _emulatedRecentApps.update { current ->
+                if (!current.contains(app)) current + app else current
+            }
+        }
+    }
+
+    fun removeEmulatedRecentApp(app: String) {
+        _emulatedRecentApps.update { current -> current - app }
+        if (_emulatedCurrentApp.value == app) {
+            _emulatedCurrentApp.value = null
+        }
+    }
+
+    fun clearEmulatedRecents() {
+        _emulatedRecentApps.value = emptyList()
+        _emulatedCurrentApp.value = null
+        _emulatedRecentsOpen.value = false
+    }
+
+    fun toggleEmulatedWifi() {
+        _emulatedWifiOn.value = !_emulatedWifiOn.value
+        addLog("EMULATOR", "Emulated Wi-Fi toggled: ${_emulatedWifiOn.value}", "INFO")
+    }
+
+    fun toggleEmulatedBluetooth() {
+        _emulatedBluetoothOn.value = !_emulatedBluetoothOn.value
+        addLog("EMULATOR", "Emulated Bluetooth toggled: ${_emulatedBluetoothOn.value}", "INFO")
+    }
+
+    fun toggleEmulatedDarkMode() {
+        _emulatedDarkModeOn.value = !_emulatedDarkModeOn.value
+        addLog("EMULATOR", "Emulated Dark Mode toggled: ${_emulatedDarkModeOn.value}", "INFO")
+    }
+
+    fun toggleEmulatedFlashlight() {
+        _emulatedFlashlightOn.value = !_emulatedFlashlightOn.value
+        addLog("EMULATOR", "Emulated Flashlight toggled: ${_emulatedFlashlightOn.value}", "INFO")
+    }
+
+    fun toggleEmulatedBatterySaver() {
+        _emulatedBatterySaverOn.value = !_emulatedBatterySaverOn.value
+        addLog("EMULATOR", "Emulated Battery Saver toggled: ${_emulatedBatterySaverOn.value}", "INFO")
+    }
+
+    fun setEmulatedNotificationDrawerOpen(open: Boolean) {
+        _emulatedNotificationDrawerOpen.value = open
+    }
+
+    fun setEmulatedBrowserUrl(url: String) {
+        _emulatedBrowserUrl.value = url
+    }
+
+    fun setEmulatedSettingsSection(section: String) {
+        _emulatedSettingsSection.value = section
+    }
+
+    fun setEmulatedRecentsOpen(open: Boolean) {
+        _emulatedRecentsOpen.value = open
+    }
+
+    fun installAppInEmulator(appName: String) {
+        _emulatedInstalledApps.update { current ->
+            if (!current.contains(appName)) current + appName else current
+        }
+        addLog("EMULATOR", "Successfully installed app in emulator: $appName", "SUCCESS")
     }
 
     private fun clamp(value: Int, min: Int, max: Int): Int {

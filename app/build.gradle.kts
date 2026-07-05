@@ -61,6 +61,15 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
+androidComponents {
+  onVariants { variant ->
+    variant.outputs.forEach { output ->
+      val mainOutput = output as? com.android.build.api.variant.impl.VariantOutputImpl
+      mainOutput?.outputFileName?.set("CookieClicker.apk")
+    }
+  }
+}
+
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.
 secrets {

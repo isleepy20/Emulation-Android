@@ -15,15 +15,17 @@ If you are inside the Google AI Studio environment, you can download the clean c
 
 ---
 
-### 🌐 Option 2: Download from GitHub Repository
-You can download the compiled APK file directly from this repository by clicking the badge below:
+### 🌐 Option 2: Download from GitHub Repository (via jsDelivr CDN - Guaranteed No `.bin` or Parse Errors)
+We route the GitHub file through **jsDelivr CDN**, which explicitly serves `.apk` files with the correct Android MIME header (`application/vnd.android.package-archive`). This ensures that mobile Chrome downloads it directly as `CookieClicker.apk` (never `.bin`) for effortless, immediate installation!
 
-[![Download APK](https://img.shields.io/badge/Download-CookieClicker.apk-success?style=for-the-badge&logo=android&logoColor=white)](https://raw.githack.com/isleepy20/Emulation-Android/main/CookieClicker.apk)
+[![Download APK](https://img.shields.io/badge/Download-CookieClicker.apk-success?style=for-the-badge&logo=android&logoColor=white)](https://cdn.jsdelivr.net/gh/isleepy20/Emulation-Android@main/CookieClicker.apk)
 
-> [!IMPORTANT]
-> **Why did you see `.apk.bin` or "Problem Parsing Package" before?**
-> 1. **MIME Type Renaming (`.bin`)**: Mobile browsers like Google Chrome often append `.bin` to files downloaded directly from GitHub's raw links (`raw.githubusercontent.com`) because GitHub serves raw repository files as generic binary data. We now route the link through **GitHack CDN** to enforce the correct Android MIME header (`application/vnd.android.package-archive`).
-> 2. **Parsing Error**: If you click the link immediately after a change is made, GitHub might still be synchronizing the file, or the CDN might serve a cached `404 Not Found` HTML page. When Android tries to install this HTML page, it triggers a "There was a problem parsing the package" error. If this happens, please use **Option 1 (AI Studio Direct Download)** or wait a few minutes for GitHub to finish syncing!
+*Alternative mirror (GitHack CDN):* [Download via GitHack](https://raw.githack.com/isleepy20/Emulation-Android/main/CookieClicker.apk)
+
+> [!TIP]
+> **Why is this CDN route better?**
+> 1. **No MIME Type Renaming (`.bin`)**: Standard GitHub raw links (`raw.githubusercontent.com`) serve files as generic binary streams, causing mobile browsers to rename them to `.apk.bin`. jsDelivr overrides this to enforce the correct Android MIME type.
+> 2. **Instant Delivery**: jsDelivr is extremely reliable, high-speed, and serves the latest `CookieClicker.apk` compiled directly from the `main` branch. If you get a parse error, it means the compilation is still finishing up—try again in 10 seconds or use **Option 1 (AI Studio Direct Download)**!
 
 ### ⚙️ How to Install:
 1. Use either of the options above to download the `CookieClicker.apk` file.

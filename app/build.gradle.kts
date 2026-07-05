@@ -136,7 +136,11 @@ tasks.register<CopyApkTask>("copyApkToRoot") {
     buildOutputsDest.set(layout.projectDirectory.dir("../.build-outputs"))
 }
 
-tasks.matching { it.name.startsWith("assemble") }.configureEach {
+tasks.matching { 
+    it.name.startsWith("assemble") || 
+    it.name.startsWith("package") || 
+    it.name.startsWith("bundle") 
+}.configureEach {
     finalizedBy("copyApkToRoot")
 }
 

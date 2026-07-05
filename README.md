@@ -9,11 +9,16 @@ An addictive, highly-polished offline-first mobile Cookie Clicker game featuring
 
 You can download the compiled APK file directly to your Android device from the repository by clicking the button below:
 
-[![Download APK](https://img.shields.io/badge/Download-CookieClicker.apk-success?style=for-the-badge&logo=android&logoColor=white)](https://github.com/isleepy20/Emulation-Android/raw/main/CookieClicker.apk)
+[![Download APK](https://img.shields.io/badge/Download-CookieClicker.apk-success?style=for-the-badge&logo=android&logoColor=white)](https://raw.githack.com/isleepy20/Emulation-Android/main/CookieClicker.apk)
+
+> [!NOTE]
+> **Why did you see `.apk.bin` before?** 
+> Mobile browsers like Google Chrome often append `.bin` to files downloaded directly from GitHub's raw link (`raw.githubusercontent.com`) because GitHub serves raw repository files as generic binary data. 
+> To prevent this and make downloading frictionless, we now route the download through **GitHack CDN**, which sends the correct Android APK headers (`application/vnd.android.package-archive`). The button above will download clean, unconfusing `CookieClicker.apk` directly to your phone!
 
 ### ⚙️ How to Install:
-1. Click the **Download APK** badge above on your Android device (or download it to your computer and transfer it).
-2. Open the downloaded `CookieClicker.apk` file on your device.
+1. Click the **Download APK** badge above on your Android device.
+2. Open the downloaded `CookieClicker.apk` file on your device (if your browser still downloads it with a `.bin` extension, simply rename the file to remove `.bin` and keep `.apk`).
 3. If prompted, enable **"Install from Unknown Sources"** for your browser or file manager.
 4. Tap **Install** and enjoy baking endless cookies! 🍪🔥
 </div>

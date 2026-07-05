@@ -5,9 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [JobLog::class], version = 1, exportSchema = false)
+@Database(entities = [JobLog::class, GameState::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun jobLogDao(): JobLogDao
+    abstract fun gameStateDao(): GameStateDao
 
     companion object {
         @Volatile
@@ -18,7 +19,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "system_console_db"
+                    "cookie_clicker_db"
                 ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance

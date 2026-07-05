@@ -1,6 +1,6 @@
 {
-  "name": "Android 16 Emulator",
-  "description": "Android 16 Baklava Platform Simulator with preinstalled applications, dialer, messaging, camera, clock, calculator, Gemini AI, developer tools, and full gesture-friendly system navigation.",
+  "name": "Cookie Clicker",
+  "description": "An addictive, highly-polished offline-first mobile Cookie Clicker game featuring progressive upgrades, achievements, offline production, clicking fever events, and interactive stats.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

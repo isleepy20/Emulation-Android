@@ -1,26 +1,22 @@
 package com.example
 
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,10 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -43,689 +41,611 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.database.JobLog
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.Android15EmulatorView
-import com.example.viewmodel.ConsoleLog
-import com.example.viewmodel.SystemViewModel
+import com.example.viewmodel.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import java.text.SimpleDateFormat
-import java.util.*
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-
-    private val requestNotificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        // Permission logged through ViewModel inside Compose setContent
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Auto request notifications permission on Android 13+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestNotificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-
         setContent {
-            MyApplicationTheme(darkTheme = true) { // We force a modern, premium technical dark mode
-                val systemViewModel: SystemViewModel = viewModel()
+            MyApplicationTheme(darkTheme = true) {
+                val gameViewModel: SystemViewModel = viewModel()
                 
-                // Track if permission is granted for UI diagnostics
-                val context = LocalContext.current
-                LaunchedEffect(Unit) {
-                    val isGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                    } else {
-                        true
-                    }
-                    systemViewModel.addManualLog(
-                        "PERMISSIONS", 
-                        "Notification Permission State Check: " + if (isGranted) "GRANTED" else "NOT GRANTED", 
-                        if (isGranted) "INFO" else "WARNING"
-                    )
-                }
-
-                // Global Layout boundaries configuration
-                val layoutBoundaries by systemViewModel.layoutBoundariesActive.collectAsState()
-                val gpuProfiling by systemViewModel.gpuProfilingActive.collectAsState()
-
-                Box(
+                Surface(
                     modifier = Modifier
                         .fillMaxSize()
-                        .safeDrawingPadding() // Ensures no overlap with physical status or navigation bars
-                        .background(MaterialTheme.colorScheme.background)
-                        .testTag("app_root_container")
+                        .safeDrawingPadding() // Guarantees absolutely no overlap with physical notches or navigations!
+                        .testTag("app_root_container"),
+                    color = Color(0xFF0F172A) // Sleek Slate-Dark background
                 ) {
-                    Android15EmulatorView(systemViewModel)
-
-                    // Optional GPU Profiling simulated overlay
-                    if (gpuProfiling) {
-                        GpuProfilingOverlay(modifier = Modifier.align(Alignment.BottomCenter))
-                    }
+                    CookieClickerMainView(gameViewModel)
                 }
             }
         }
     }
 }
 
-// Custom Debug Outline Modifier to simulate "Show Layout Boundaries" developer tool
 @Composable
-fun Modifier.debugOutline(active: Boolean, color: Color = Color(0xFFE91E63)): Modifier {
-    return if (active) {
-        this.border(1.dp, color)
-    } else {
-        this
-    }
-}
+fun CookieClickerMainView(viewModel: SystemViewModel) {
+    var activeTab by remember { mutableStateOf(0) }
+    
+    val currentCookies by viewModel.currentCookies.collectAsState()
+    val totalCookiesBaked by viewModel.totalCookiesBaked.collectAsState()
+    val totalClicks by viewModel.totalClicks.collectAsState()
+    val upgrades by viewModel.upgrades.collectAsState()
+    val achievements by viewModel.achievements.collectAsState()
+    val floatingTexts by viewModel.floatingTexts.collectAsState()
+    val goldenCookie by viewModel.goldenCookie.collectAsState()
+    
+    val feverActive by viewModel.feverActive.collectAsState()
+    val feverSecondsRemaining by viewModel.feverSecondsRemaining.collectAsState()
+    val offlineEarnings by viewModel.offlineEarnings.collectAsState()
+    val offlineSeconds by viewModel.offlineSeconds.collectAsState()
+    val productionHistory by viewModel.productionHistory.collectAsState()
+    
+    val cps = viewModel.getCookiesPerSecond()
+    val clickPower = viewModel.getClickPower()
 
-@Composable
-fun SystemBottomNavigation(viewModel: SystemViewModel) {
-    val selectedTab by viewModel.selectedTab.collectAsState()
-    val activeTasks by viewModel.activeTasksCount.collectAsState()
-
-    NavigationBar(
-        modifier = Modifier.testTag("bottom_nav_bar")
-    ) {
-        NavigationBarItem(
-            selected = selectedTab == 0,
-            onClick = { viewModel.setSelectedTab(0) },
-            icon = { Icon(Icons.Default.Settings, contentDescription = "System") },
-            label = { Text("System") },
-            modifier = Modifier.testTag("nav_tab_system")
-        )
-        NavigationBarItem(
-            selected = selectedTab == 1,
-            onClick = { viewModel.setSelectedTab(1) },
-            icon = { Icon(Icons.Default.Dns, contentDescription = "Play Services") },
-            label = { Text("Play Services") },
-            modifier = Modifier.testTag("nav_tab_play_services")
-        )
-        NavigationBarItem(
-            selected = selectedTab == 2,
-            onClick = { viewModel.setSelectedTab(2) },
-            icon = { 
-                BadgedBox(
-                    badge = {
-                        if (activeTasks > 0) {
-                            Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                                Text(activeTasks.toString())
-                            }
-                        }
-                    }
-                ) {
-                    Icon(Icons.AutoMirrored.Default.ListAlt, contentDescription = "WorkManager")
+    // Offline popup alert dialog
+    if (offlineEarnings != null && offlineSeconds > 0) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissOfflinePopup() },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🍪 Welcome Back!", fontWeight = FontWeight.Bold, color = Color(0xFFFFB74D))
                 }
             },
-            label = { Text("WorkManager") },
-            modifier = Modifier.testTag("nav_tab_workmanager")
+            text = {
+                Column {
+                    Text(
+                        "While you were away for ${viewModel.formatValue(offlineSeconds.toDouble())} seconds, your hard-working bakery produced:",
+                        fontSize = 14.sp,
+                        color = Color.LightGray
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "${viewModel.formatValue(offlineEarnings!!)} Cookies",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF4FC3F7),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.dismissOfflinePopup() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00B4DB))
+                ) {
+                    Text("Awesome!", fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = Color(0xFF1E293B),
+            shape = RoundedCornerShape(24.dp)
         )
-        NavigationBarItem(
-            selected = selectedTab == 3,
-            onClick = { viewModel.setSelectedTab(3) },
-            icon = { Icon(Icons.Default.Terminal, contentDescription = "DevTools") },
-            label = { Text("Dev Tools") },
-            modifier = Modifier.testTag("nav_tab_devtools")
-        )
-        NavigationBarItem(
-            selected = selectedTab == 4,
-            onClick = { viewModel.setSelectedTab(4) },
-            icon = { Icon(Icons.Default.CloudDownload, contentDescription = "GitHub") },
-            label = { Text("GitHub") },
-            modifier = Modifier.testTag("nav_tab_github")
-        )
+    }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color(0xFF1E293B),
+                tonalElevation = 8.dp,
+                modifier = Modifier.clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+            ) {
+                NavigationBarItem(
+                    selected = activeTab == 0,
+                    onClick = { activeTab = 0 },
+                    icon = { Icon(Icons.Default.TouchApp, contentDescription = "Bake", modifier = Modifier.size(24.dp)) },
+                    label = { Text("Bake", fontWeight = FontWeight.SemiBold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFF00B4DB),
+                        selectedTextColor = Color(0xFF00B4DB),
+                        indicatorColor = Color(0xFF334155)
+                    )
+                )
+                NavigationBarItem(
+                    selected = activeTab == 1,
+                    onClick = { activeTab = 1 },
+                    icon = { Icon(Icons.Default.Store, contentDescription = "Upgrades", modifier = Modifier.size(24.dp)) },
+                    label = { Text("Shop", fontWeight = FontWeight.SemiBold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFFFFB74D),
+                        selectedTextColor = Color(0xFFFFB74D),
+                        indicatorColor = Color(0xFF334155)
+                    )
+                )
+                NavigationBarItem(
+                    selected = activeTab == 2,
+                    onClick = { activeTab = 2 },
+                    icon = { Icon(Icons.Default.Analytics, contentDescription = "Stats", modifier = Modifier.size(24.dp)) },
+                    label = { Text("Stats & Ach", fontWeight = FontWeight.SemiBold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFF81C784),
+                        selectedTextColor = Color(0xFF81C784),
+                        indicatorColor = Color(0xFF334155)
+                    )
+                )
+            }
+        },
+        containerColor = Color(0xFF0F172A)
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            // Top Premium Banner / Header showing Current Cookies
+            HeaderWidget(
+                currentCookies = currentCookies,
+                cps = cps,
+                feverActive = feverActive,
+                feverSeconds = feverSecondsRemaining,
+                viewModel = viewModel
+            )
+
+            // Dynamic Tab Views
+            Box(modifier = Modifier.weight(1f)) {
+                when (activeTab) {
+                    0 -> BakeTab(
+                        viewModel = viewModel,
+                        floatingTexts = floatingTexts,
+                        goldenCookie = goldenCookie,
+                        clickPower = clickPower,
+                        feverActive = feverActive
+                    )
+                    1 -> UpgradesTab(
+                        viewModel = viewModel,
+                        upgrades = upgrades,
+                        currentCookies = currentCookies
+                    )
+                    2 -> StatsTab(
+                        viewModel = viewModel,
+                        totalCookies = totalCookiesBaked,
+                        currentCookies = currentCookies,
+                        totalClicks = totalClicks,
+                        clickPower = clickPower,
+                        cps = cps,
+                        achievements = achievements,
+                        productionHistory = productionHistory
+                    )
+                }
+            }
+        }
     }
 }
 
-// -------------------------------------------------------------
-// TAB 0: SYSTEM STATUS & NATIVE EMULATION
-// -------------------------------------------------------------
 @Composable
-fun SystemStatusTab(viewModel: SystemViewModel) {
-    var showEmulator by remember { mutableStateOf(true) }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        // High-fidelity Segmented Toggle at the top to switch modes
-        Row(
+fun HeaderWidget(
+    currentCookies: Double,
+    cps: Double,
+    feverActive: Boolean,
+    feverSeconds: Int,
+    viewModel: SystemViewModel
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Button(
-                onClick = { showEmulator = true },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (showEmulator) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    contentColor = if (showEmulator) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f).testTag("select_emulator_mode_btn")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.PhoneAndroid, contentDescription = "Emulator", modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Android 15 Emulator", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "🍪 COOKIE MOBILE",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.6f),
+                    letterSpacing = 2.sp
+                )
+
+                // Quick reset button for easy testing or restarting
+                IconButton(
+                    onClick = { viewModel.resetGame() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Reset Game",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
-            Button(
-                onClick = { showEmulator = false },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (!showEmulator) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    contentColor = if (!showEmulator) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f).testTag("select_diagnostics_mode_btn")
-            ) {
-                Icon(Icons.Default.Analytics, contentDescription = "Diagnostics", modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Performance Dash", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-        }
+            Spacer(modifier = Modifier.height(4.dp))
 
-        AnimatedContent(
-            targetState = showEmulator,
-            transitionSpec = {
-                fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
-            },
-            label = "EmulatorToggle"
-        ) { isEmulator ->
-            if (isEmulator) {
-                Android15EmulatorView(viewModel)
-            } else {
-                DiagnosticsDashboard(viewModel)
+            Text(
+                text = "${viewModel.formatValue(currentCookies)} Cookies",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Black,
+                color = if (feverActive) Color(0xFFFFD700) else Color(0xFF4FC3F7),
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    shadow = Shadow(
+                        color = if (feverActive) Color(0xFFFF9800).copy(alpha = 0.5f) else Color(0xFF00B4DB).copy(alpha = 0.3f),
+                        offset = Offset(2f, 2f),
+                        blurRadius = 8f
+                    )
+                )
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = "per second: ${viewModel.formatValue(cps)}",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.LightGray
+            )
+
+            // Fever indicator
+            if (feverActive) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .background(Color(0xFFE65100).copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.FlashOn, "Fever", tint = Color.Yellow, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        "FEVER MODE (7X PRODUCTION): ${feverSeconds}s",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun DiagnosticsDashboard(viewModel: SystemViewModel) {
-    val fps by viewModel.fps.collectAsState()
-    val fpsHistory by viewModel.fpsHistory.collectAsState()
-    val cpuLoad by viewModel.cpuLoad.collectAsState()
-    val ramUsage by viewModel.ramUsage.collectAsState()
-    val debugActive by viewModel.layoutBoundariesActive.collectAsState()
+fun BakeTab(
+    viewModel: SystemViewModel,
+    floatingTexts: List<FloatingText>,
+    goldenCookie: GoldenCookieState,
+    clickPower: Double,
+    feverActive: Boolean
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1.0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        finishedListener = { if (isPressed) isPressed = false }
+    )
 
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                // Background radial sunburst drawing to mimic a delightful vintage gameplay environment
+                if (feverActive) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0xFFE65100).copy(alpha = 0.25f), Color.Transparent)
+                        ),
+                        radius = size.minDimension * 0.8f
+                    )
+                } else {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0xFF00B4DB).copy(alpha = 0.15f), Color.Transparent)
+                        ),
+                        radius = size.minDimension * 0.7f
+                    )
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // Golden Cookie floating random popup
+        if (goldenCookie.isVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(
+                            x = (goldenCookie.xPercent * 300).dp, // safe screen bound calculation
+                            y = (goldenCookie.yPercent * 500).dp
+                        )
+                        .scale(1.2f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            viewModel.clickGoldenCookie()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Floating Golden Cookie visual
+                    Box(
+                        modifier = Modifier
+                            .size(goldenCookie.size.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color(0xFFFFF176), Color(0xFFFFB300), Color(0xFFF57C00))
+                                )
+                            )
+                            .border(3.dp, Color.White, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("✨🍪✨", fontSize = 24.sp, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        }
+
+        // Giant Cookie Interactive Box
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(240.dp)
+                    .scale(scale)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null, // Disable default gray ripple so we can enjoy custom bounce animation
+                        onClick = {
+                            isPressed = true
+                            viewModel.clickCookie()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // Glow effect underneath giant cookie
+                Box(
+                    modifier = Modifier
+                        .size(260.dp)
+                        .drawBehind {
+                            drawCircle(
+                                color = if (feverActive) Color(0xFFFFB300).copy(alpha = 0.2f) else Color(0xFF00B4DB).copy(alpha = 0.15f),
+                                radius = size.minDimension * 0.5f
+                            )
+                        }
+                )
+
+                // The giant cookie image asset
+                Image(
+                    painter = painterResource(id = R.drawable.img_cookie),
+                    contentDescription = "Giant Cookie",
+                    modifier = Modifier
+                        .size(220.dp)
+                        .clip(CircleShape)
+                        .border(4.dp, if (feverActive) Color(0xFFFFB300) else Color(0xFF334155), CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+
+                // Float numbers box (Rendered inside the cookie region)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    floatingTexts.forEach { ft ->
+                        Box(
+                            modifier = Modifier
+                                .offset(x = ft.xOffset.dp, y = ft.yOffset.dp)
+                        ) {
+                            Text(
+                                text = ft.text,
+                                color = if (ft.isFever) Color(0xFFFFD700) else Color.White,
+                                fontWeight = FontWeight.Black,
+                                fontSize = (22 * ft.scale).sp,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    shadow = Shadow(
+                                        color = Color.Black,
+                                        offset = Offset(2f, 2f),
+                                        blurRadius = 6f
+                                    )
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "TAP THE COOKIE!",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (feverActive) Color(0xFFFFD700) else Color.White.copy(alpha = 0.8f),
+                letterSpacing = 1.sp
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "+${viewModel.formatValue(clickPower)} per click",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.LightGray
+            )
+        }
+    }
+}
+
+@Composable
+fun UpgradesTab(
+    viewModel: SystemViewModel,
+    upgrades: List<UpgradeItem>,
+    currentCookies: Double
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            // Technical Header Banner
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = Color.Black)
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Image(
-                        painter = painterResource(id = R.drawable.img_system_banner),
-                        contentDescription = "System banner",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.45f
-                    )
-                    
-                    // Technical Overlay
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
-                                )
-                            )
-                    )
+            Text(
+                text = "⚡ CLICK POWER UPGRADES",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = Color(0xFFFFB74D),
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+        }
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(
-                                    text = "ANDROID 15 NATIVE PLATFORM",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(Color(0xFFB6FFB6).copy(alpha = 0.85f), CircleShape)
-                                )
-                                Text(
-                                    text = "EMULATOR ACTIVE",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFB6FFB6)
-                                )
-                            }
-                        }
-
-                        Column {
-                            Text(
-                                text = "System Monitor",
-                                fontSize = 26.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = Color(0xFFE6E1E5)
-                            )
-                            Text(
-                                text = "Android 15 • Build AD1.2405 • API ${viewModel.sdkVersion} (${viewModel.codename})",
-                                fontSize = 11.sp,
-                                color = Color(0xFFCAC4D0)
-                            )
-                        }
-                    }
-                }
-            }
+        items(upgrades.filter { !it.isCps }) { item ->
+            UpgradeCard(item = item, currentCookies = currentCookies, onBuy = { viewModel.buyUpgrade(item.id) }, viewModel = viewModel)
         }
 
         item {
-            // Physical Phone Installation & Stream Delay Optimizer Guide
-            var linkCopied by remember { mutableStateOf(false) }
-            val context = LocalContext.current
-            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-            val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager }
-            val debugActive by viewModel.layoutBoundariesActive.collectAsState()
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhoneAndroid,
-                            contentDescription = "Physical Phone",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Text(
-                            text = "RUN ON YOUR PHYSICAL PHONE",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Text(
-                        text = "Escape the web-streaming latency entirely! Since you have connected your GitHub account, you can compile and download the native `.apk` directly onto your Android device for native 60 FPS performance.",
-                        fontSize = 12.sp,
-                        color = Color.LightGray
-                    )
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f))
-
-                    // Step 1: Download Native APK
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("1", color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Compile & Download Native APK", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text(
-                                text = "1. Click the Settings (Gear Icon) in the Google AI Studio top-right bar.\n" +
-                                        "2. Select 'Generate APK / AAB' from the menu.\n" +
-                                        "3. Google AI Studio will compile your code and download the official '.apk' file to your computer/phone.",
-                                fontSize = 11.sp,
-                                color = Color.Gray,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-
-                    // Step 2: Open on Device
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("2", color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Install on Android Phone", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text(
-                                text = "Transfer the downloaded APK file to your phone (via USB, Google Drive, email, or by downloading it directly from your GitHub repository releases/actions), open the file, and authorize 'Install from Unknown Sources' to run the app.",
-                                fontSize = 11.sp,
-                                color = Color.Gray,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-
-                    // Step 3: Run Mobile Web Emulator
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("3", color = MaterialTheme.colorScheme.onPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Instant Option: Web-Stream on Mobile Chrome", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text(
-                                text = "Open your app's live stream URL in your phone's browser for full touch screen control without installing any files.",
-                                fontSize = 11.sp,
-                                color = Color.Gray,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                val clip = android.content.ClipData.newPlainText("Shared App URL", "https://ais-pre-jwh27wjvhdyjhds755jnff-167799279054.us-east1.run.app")
-                                clipboardManager.setPrimaryClip(clip)
-                                linkCopied = true
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                            modifier = Modifier.weight(1f).testTag("copy_phone_link_btn")
-                        ) {
-                            Icon(
-                                imageVector = if (linkCopied) Icons.Default.Check else Icons.Default.ContentCopy,
-                                contentDescription = "Copy Link",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (linkCopied) "Link Copied!" else "Copy Phone Link", fontSize = 12.sp)
-                        }
-
-                        Button(
-                            onClick = {
-                                uriHandler.openUri("https://ais-pre-jwh27wjvhdyjhds755jnff-167799279054.us-east1.run.app")
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f).testTag("open_phone_stream_btn")
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Open Link", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Launch Stream", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "👵 AUTO-CPS BAKERS",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = Color(0xFF00B4DB),
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
         }
 
-        item {
-            // Live Diagnostics Grid
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // FPS Card
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(95.dp)
-                        .debugOutline(debugActive),
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("LIVE FPS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            text = String.format("%.1f", fps),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            color = if (fps >= 55) Color(0xFFB6FFB6) else Color(0xFFFFCC00)
-                        )
-                        LinearProgressIndicator(
-                            progress = { (fps / 60.0).toFloat() },
-                            modifier = Modifier.fillMaxWidth().height(3.dp),
-                            color = if (fps >= 55) Color(0xFFB6FFB6) else Color(0xFFFFCC00),
-                            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-                        )
-                    }
-                }
-
-                // CPU Load Card
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(95.dp)
-                        .debugOutline(debugActive),
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("CPU LOAD", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            text = "$cpuLoad%",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        LinearProgressIndicator(
-                            progress = { (cpuLoad / 100f) },
-                            modifier = Modifier.fillMaxWidth().height(3.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-                        )
-                    }
-                }
-
-                // RAM Usage Card
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(95.dp)
-                        .debugOutline(debugActive),
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(10.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("RAM USE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            text = String.format("%.2f GB", ramUsage),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        LinearProgressIndicator(
-                            progress = { (ramUsage / 8.0).toFloat() },
-                            modifier = Modifier.fillMaxWidth().height(3.dp),
-                            color = MaterialTheme.colorScheme.secondary,
-                            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-                        )
-                    }
-                }
-            }
+        items(upgrades.filter { it.isCps }) { item ->
+            UpgradeCard(item = item, currentCookies = currentCookies, onBuy = { viewModel.buyUpgrade(item.id) }, viewModel = viewModel)
         }
-
+        
         item {
-            // Live Frame Rendering Path Graph (Custom Canvas)
-            Card(
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+fun UpgradeCard(
+    item: UpgradeItem,
+    currentCookies: Double,
+    onBuy: () -> Unit,
+    viewModel: SystemViewModel
+) {
+    val canAfford = currentCookies >= item.currentCost
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (canAfford) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                1.dp,
+                if (canAfford) {
+                    if (item.isCps) Color(0xFF00B4DB).copy(alpha = 0.5f) else Color(0xFFFFB74D).copy(alpha = 0.5f)
+                } else Color.Transparent,
+                RoundedCornerShape(16.dp)
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Upgrade Emoji/Icon box
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(135.dp)
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    .size(48.dp)
+                    .background(Color(0xFF334155), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
+                Text(item.icon, fontSize = 24.sp)
+            }
+
+            // Description column
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        "FRAME TIME TELEMETRY (LIVE)",
-                        fontSize = 11.sp,
+                        text = item.name,
                         fontWeight = FontWeight.Bold,
-                        color = Color.LightGray
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val width = size.width
-                            val height = size.height
-                            val spacing = width / (fpsHistory.size - 1)
-                            
-                            val path = Path()
-                            fpsHistory.forEachIndexed { index, value ->
-                                // Map 30fps to 60fps onto canvas height
-                                val normalizedVal = clampFloat((value - 30f) / 30f, 0f, 1f)
-                                val x = index * spacing
-                                val y = height - (normalizedVal * height)
-                                if (index == 0) {
-                                    path.moveTo(x, y)
-                                } else {
-                                    path.lineTo(x, y)
-                                }
-                            }
-                            
-                            drawPath(
-                                path = path,
-                                color = Color(0xFFB6FFB6),
-                                style = Stroke(width = 2.5.dp.toPx())
+                    if (item.count > 0) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFF00B4DB).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "x${item.count}",
+                                color = Color(0xFF4FC3F7),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("History Interval (last 20 frames)", fontSize = 9.sp, color = Color.Gray)
-                        Text("Target: 60Hz", fontSize = 9.sp, color = Color(0xFFB6FFB6))
-                    }
                 }
+                
+                Spacer(modifier = Modifier.height(2.dp))
+                
+                Text(
+                    text = item.description,
+                    fontSize = 11.sp,
+                    color = Color.LightGray,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-        }
 
-        item {
-            // Native Platform Spec Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+            // Price & Buy button column
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "${viewModel.formatValue(item.currentCost)} 🍪",
+                    color = if (canAfford) Color(0xFFFFB74D) else Color.Gray,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Button(
+                    onClick = onBuy,
+                    enabled = canAfford,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (item.isCps) Color(0xFF00B4DB) else Color(0xFFFFB74D),
+                        disabledContainerColor = Color(0xFF475569).copy(alpha = 0.3f)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(28.dp)
                 ) {
                     Text(
-                        "HARDWARE ENGINE SPECIFICATIONS",
+                        "BUY",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        fontWeight = FontWeight.Black,
+                        color = if (canAfford) Color.White else Color.Gray
                     )
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f))
-
-                    SpecRow("Hardware Model", viewModel.model)
-                    SpecRow("Manufacturer", viewModel.manufacturer)
-                    SpecRow("System Kernel", "Android 15 Native SDK runtime wrapper")
-                    SpecRow("Edge-to-Edge Enabled", "TRUE (enableEdgeToEdge() loaded)")
-                    SpecRow("Predictive Back Handled", "TRUE (OnBackPressedDispatcher linked)")
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Button(
-                        onClick = {
-                            viewModel.addManualLog("SYSTEM", "Simulating native Predictive Back Gesture. Closing secondary sheets.", "INFO")
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("predictive_back_btn")
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Simulate Predictive Back Gesture")
-                    }
                 }
             }
         }
@@ -733,1542 +653,244 @@ fun DiagnosticsDashboard(viewModel: SystemViewModel) {
 }
 
 @Composable
-fun SpecRow(label: String, value: String) {
+fun StatsTab(
+    viewModel: SystemViewModel,
+    totalCookies: Double,
+    currentCookies: Double,
+    totalClicks: Long,
+    clickPower: Double,
+    cps: Double,
+    achievements: List<Achievement>,
+    productionHistory: List<Double>
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 1. Real-time Production Graph
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "📈 REAL-TIME BAKERY STATS",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4FC3F7),
+                        fontSize = 12.sp,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // High-fidelity custom live line graph
+                    LiveProductionChart(history = productionHistory)
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Live cookie production over the last 30 seconds",
+                        fontSize = 10.sp,
+                        color = Color.LightGray.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // 2. Numerical stats
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "📊 STATS OVERVIEW",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFB74D),
+                        fontSize = 12.sp,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    StatRow("Current cookies", viewModel.formatValue(currentCookies))
+                    StatRow("Total cookies baked", viewModel.formatValue(totalCookies))
+                    StatRow("Cookies per Click", viewModel.formatValue(clickPower))
+                    StatRow("Cookies per Second", viewModel.formatValue(cps))
+                    StatRow("Total giant cookie clicks", totalClicks.toString())
+                }
+            }
+        }
+
+        // 3. Achievements Title
+        item {
+            Text(
+                text = "🏆 ACHIEVEMENTS UNLOCKED (${achievements.count { it.isUnlocked }}/${achievements.size})",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = Color(0xFF81C784),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
+
+        // 4. Achievements List
+        items(achievements.chunked(3)) { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                for (ach in rowItems) {
+                    AchievementBadge(ach = ach, modifier = Modifier.weight(1f))
+                }
+                // Fill up remainder empty space
+                if (rowItems.size < 3) {
+                    repeat(3 - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+fun LiveProductionChart(history: List<Double>) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(110.dp)
+            .background(Color(0xFF0F172A), RoundedCornerShape(16.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+    ) {
+        val width = size.width
+        val height = size.height
+        val points = history
+        if (points.isNotEmpty()) {
+            val maxVal = points.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
+            val minVal = points.minOrNull() ?: 0.0
+            val range = (maxVal - minVal).coerceAtLeast(1.0)
+            
+            val path = Path()
+            points.forEachIndexed { idx, value ->
+                val x = idx * (width / (points.size - 1))
+                val y = height - ((value - minVal) / range * (height - 24f)).toFloat() - 12f
+                if (idx == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    path.lineTo(x, y)
+                }
+            }
+            
+            // Neon cyan glowing stroke line
+            drawPath(
+                path = path,
+                color = Color(0xFF00B4DB),
+                style = Stroke(width = 3.dp.toPx())
+            )
+            
+            // Subtly shaded neon fill below
+            val fillPath = Path().apply {
+                addPath(path)
+                lineTo(width, height)
+                lineTo(0f, height)
+                close()
+            }
+            drawPath(
+                path = fillPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFF00B4DB).copy(alpha = 0.25f), Color.Transparent)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+fun StatRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, fontSize = 13.sp, color = Color.LightGray)
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White, fontFamily = FontFamily.Monospace)
-    }
-}
-
-// -------------------------------------------------------------
-// TAB 1: GOOGLE PLAY SERVICES INTEGRATIONS
-// -------------------------------------------------------------
-@Composable
-fun PlayServicesTab(viewModel: SystemViewModel) {
-    val playStatus by viewModel.playServicesStatus.collectAsState()
-    val gpsConnected by viewModel.gpsLocationConnected.collectAsState()
-    val fcmToken by viewModel.fcmToken.collectAsState()
-    val debugActive by viewModel.layoutBoundariesActive.collectAsState()
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            // Card displaying Play Services current simulation state
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(
-                    containerColor = when (playStatus) {
-                        "AVAILABLE" -> MaterialTheme.colorScheme.primaryContainer
-                        else -> MaterialTheme.colorScheme.errorContainer
-                    }
-                )
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "Google Play Services Status",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = when (playStatus) {
-                                    "AVAILABLE" -> MaterialTheme.colorScheme.onPrimaryContainer
-                                    else -> MaterialTheme.colorScheme.onErrorContainer
-                                }
-                            )
-                            Text(
-                                text = "CURRENT: $playStatus",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Black,
-                                color = when (playStatus) {
-                                    "AVAILABLE" -> MaterialTheme.colorScheme.onPrimaryContainer
-                                    else -> MaterialTheme.colorScheme.onErrorContainer
-                                }
-                            )
-                        }
-                        Icon(
-                            imageVector = if (playStatus == "AVAILABLE") Icons.Default.CloudQueue else Icons.Default.CloudOff,
-                            contentDescription = "Cloud Status",
-                            tint = when (playStatus) {
-                                "AVAILABLE" -> MaterialTheme.colorScheme.onPrimaryContainer
-                                else -> MaterialTheme.colorScheme.onErrorContainer
-                            },
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = when (playStatus) {
-                            "AVAILABLE" -> "Google Api Availability check succeeded. Native mapping, sign-in, and location listeners are bound to Google play services engine."
-                            "OUT_OF_DATE" -> "WARNING: Google Play Services requires updating. Application services falling back to native Android framework hooks."
-                            else -> "ERROR: Google Play Services unavailable. Maps and FCM background sync channels suspended."
-                        },
-                        fontSize = 11.sp,
-                        color = when (playStatus) {
-                            "AVAILABLE" -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            else -> MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
-                        }
-                    )
-                }
-            }
-        }
-
-        item {
-            // Google Play Services Simulated Status Controller
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        "DEBUG OVERRIDE: PLAY SERVICES CONFIG",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Button(
-                            onClick = { viewModel.updatePlayServicesStatus("AVAILABLE") },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (playStatus == "AVAILABLE") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f).testTag("play_avail_btn")
-                        ) {
-                            Text("Available", fontSize = 10.sp)
-                        }
-                        Button(
-                            onClick = { viewModel.updatePlayServicesStatus("OUT_OF_DATE") },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (playStatus == "OUT_OF_DATE") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surface
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f).testTag("play_out_btn")
-                        ) {
-                            Text("Out-of-Date", fontSize = 10.sp)
-                        }
-                        Button(
-                            onClick = { viewModel.updatePlayServicesStatus("SUSPENDED") },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (playStatus == "SUSPENDED") Color.Red else MaterialTheme.colorScheme.surface
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f).testTag("play_susp_btn")
-                        ) {
-                            Text("Suspended", fontSize = 10.sp)
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            // Google Location Service Lock
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(Icons.Default.MyLocation, contentDescription = "GPS Location", tint = MaterialTheme.colorScheme.primary)
-                            Column {
-                                Text("Google Fused Location Provider", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text(
-                                    text = if (gpsConnected) "Status: HIGH_ACCURACY Lock Active" else "Status: DISCONNECTED",
-                                    fontSize = 11.sp,
-                                    color = if (gpsConnected) Color(0xFFB6FFB6) else Color.Gray
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = gpsConnected,
-                            onCheckedChange = { viewModel.toggleGpsLocation() },
-                            modifier = Modifier.testTag("location_provider_switch")
-                        )
-                    }
-
-                    if (gpsConnected) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                                .padding(10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text("Mock Position Latitude/Longitude", fontSize = 9.sp, color = Color.Gray)
-                                Text("37.4220° N, 122.0841° W", fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                                Text("Googleplex, Mountain View, CA", fontSize = 11.sp, color = Color.LightGray)
-                            }
-                            Icon(Icons.Default.GpsFixed, contentDescription = "Fixed Lock", tint = Color(0xFFB6FFB6))
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            // Google Maps SDK Simulated Map Vector Graphic
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "GOOGLE MAPS SDK OVERLAY",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Surface(color = Color.Black, shape = RoundedCornerShape(4.dp)) {
-                            Text("V4.2.1", fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    // Custom Simulated Vector Map View
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(130.dp)
-                            .background(Color(0xFF202025), RoundedCornerShape(14.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            // Draw simulated map grid lines
-                            val gridSpacing = 40.dp.toPx()
-                            for (x in 0..size.width.toInt() step gridSpacing.toInt()) {
-                                drawLine(
-                                    color = Color(0xFF303035),
-                                    start = Offset(x.toFloat(), 0f),
-                                    end = Offset(x.toFloat(), size.height),
-                                    strokeWidth = 1.dp.toPx()
-                                )
-                            }
-                            for (y in 0..size.height.toInt() step gridSpacing.toInt()) {
-                                drawLine(
-                                    color = Color(0xFF303035),
-                                    start = Offset(0f, y.toFloat()),
-                                    end = Offset(size.width, y.toFloat()),
-                                    strokeWidth = 1.dp.toPx()
-                                )
-                            }
-                            
-                            // Draw simulated highways
-                            drawLine(
-                                color = Color(0xFF50505A),
-                                start = Offset(0f, size.height * 0.3f),
-                                end = Offset(size.width, size.height * 0.7f),
-                                strokeWidth = 8.dp.toPx()
-                            )
-                            drawLine(
-                                color = Color(0xFF50505A),
-                                start = Offset(size.width * 0.5f, 0f),
-                                end = Offset(size.width * 0.5f, size.height),
-                                strokeWidth = 6.dp.toPx()
-                            )
-                            
-                            // Draw GPS marker
-                            if (gpsConnected) {
-                                drawCircle(
-                                    color = Color(0xFF33B5E5).copy(alpha = 0.35f),
-                                    radius = 20.dp.toPx(),
-                                    center = Offset(size.width * 0.5f, size.height * 0.5f)
-                                )
-                                drawCircle(
-                                    color = Color.White,
-                                    radius = 5.dp.toPx(),
-                                    center = Offset(size.width * 0.5f, size.height * 0.5f)
-                                )
-                                drawCircle(
-                                    color = Color(0xFF33B5E5),
-                                    radius = 3.dp.toPx(),
-                                    center = Offset(size.width * 0.5f, size.height * 0.5f)
-                                )
-                            }
-                        }
-                        
-                        Text(
-                            text = if (gpsConnected) "Maps API Render: Googleplex Locked" else "Maps API Render: Offline",
-                            fontSize = 10.sp,
-                            color = Color.White,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(8.dp)
-                                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            // FCM Setup Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(Icons.Default.NotificationsActive, contentDescription = "FCM Notification", tint = MaterialTheme.colorScheme.secondary)
-                            Text("Google Cloud Messaging (FCM)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text("Secure Token Payload:", fontSize = 11.sp, color = Color.Gray)
-                    
-                    Text(
-                        text = fcmToken,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = Color.White,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                            .padding(10.dp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    Button(
-                        onClick = { viewModel.regenerateFcmToken() },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("rotate_token_btn")
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Rotate")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Rotate Secure Push Token")
-                    }
-                }
-            }
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// TAB 2: WORKMANAGER BACKGROUND TASKS
-// -------------------------------------------------------------
-@Composable
-fun WorkManagerTab(viewModel: SystemViewModel) {
-    val jobLogs by viewModel.jobLogs.collectAsState()
-    val activeTasks by viewModel.activeTasksCount.collectAsState()
-    val debugActive by viewModel.layoutBoundariesActive.collectAsState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp)
-    ) {
-        // Upper Scheduler Actions panel
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .debugOutline(debugActive),
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    "WORKMANAGER TASK CONTROL",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Simulates native Android 15 periodic and immediate background worker threads. Triggers persistent Room logging and real system notifications.",
-                    fontSize = 11.sp,
-                    color = Color.LightGray
-                )
-
-                if (activeTasks > 0) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text("$activeTasks Active WorkManager job(s) executing...", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { viewModel.triggerBackgroundTask("Periodic Telemetry Sync") },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f).testTag("trigger_telemetry_btn")
-                    ) {
-                        Icon(Icons.Default.SyncAlt, contentDescription = "Sync", modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Sync Telemetry", fontSize = 10.sp)
-                    }
-
-                    Button(
-                        onClick = { viewModel.triggerBackgroundTask("FCM Notification Fetcher") },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f).testTag("trigger_fcm_btn")
-                    ) {
-                        Icon(Icons.Default.DownloadForOffline, contentDescription = "FCM Fetch", modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Fetch FCM Queue", fontSize = 10.sp)
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Persistent database headers
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "ROOM SQLITE SYNC LOGS (${jobLogs.size})",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.LightGray
-            )
-
-            TextButton(
-                onClick = { viewModel.clearAllJobLogs() },
-                enabled = jobLogs.isNotEmpty(),
-                modifier = Modifier.testTag("clear_logs_btn")
-            ) {
-                Icon(Icons.Default.DeleteSweep, contentDescription = "Clear Logs", modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Truncate Table", fontSize = 11.sp)
-            }
-        }
-
-        // List of persistent SQLite Room logs
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            if (jobLogs.isEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Default.Storage,
-                        contentDescription = "Empty",
-                        modifier = Modifier.size(40.dp),
-                        tint = Color.DarkGray
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("No sync records found in Room database.", fontSize = 13.sp, color = Color.Gray)
-                    Text("Trigger an action above to insert SQLite rows.", fontSize = 11.sp, color = Color.DarkGray)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(jobLogs, key = { it.id }) { log ->
-                        JobLogCard(log, onDelete = { viewModel.clearAllJobLogs() }, debugActive)
-                    }
-                }
-            }
-        }
+        Text(label, color = Color.LightGray, fontSize = 13.sp)
+        Text(value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
     }
 }
 
 @Composable
-fun JobLogCard(log: JobLog, onDelete: () -> Unit, debugActive: Boolean) {
-    val formatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
-    val timeString = formatter.format(Date(log.timestamp))
-
+fun AchievementBadge(ach: Achievement, modifier: Modifier = Modifier) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .debugOutline(debugActive),
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Surface(
-                        color = when (log.status) {
-                            "SUCCESS" -> Color(0xFFB6FFB6).copy(alpha = 0.15f)
-                            "RUNNING" -> Color(0xFF33B5E5).copy(alpha = 0.15f)
-                            else -> Color.Red.copy(alpha = 0.15f)
-                        },
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text = log.status,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = when (log.status) {
-                                "SUCCESS" -> Color(0xFFB6FFB6)
-                                "RUNNING" -> Color(0xFF33B5E5)
-                                else -> Color.Red
-                            },
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                    }
-                    Text(log.jobName, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                }
-                Text(timeString, fontSize = 10.sp, color = Color.Gray, fontFamily = FontFamily.Monospace)
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(log.message, fontSize = 11.sp, color = Color.LightGray)
-
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Payload: ${log.payloadSize}", fontSize = 10.sp, color = Color.Gray, fontFamily = FontFamily.Monospace)
-                    if (log.executionTimeMs > 0) {
-                        Text("Duration: ${log.executionTimeMs}ms", fontSize = 10.sp, color = Color.Gray, fontFamily = FontFamily.Monospace)
-                    }
-                }
-                Text("Row ID: #${log.id}", fontSize = 10.sp, color = Color.DarkGray, fontFamily = FontFamily.Monospace)
-            }
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// TAB 3: DEVELOPER TOOLS & DIAGNOSTICS LOGS
-// -------------------------------------------------------------
-@Composable
-fun DevToolsTab(viewModel: SystemViewModel) {
-    val customLogs by viewModel.customLogs.collectAsState()
-    val boundariesActive by viewModel.layoutBoundariesActive.collectAsState()
-    val gpuProfilingActive by viewModel.gpuProfilingActive.collectAsState()
-    val streamQualityUHD by viewModel.streamQualityUHD.collectAsState()
-    val inputLatencyOptimized by viewModel.inputLatencyOptimized.collectAsState()
-    val debugActive by viewModel.layoutBoundariesActive.collectAsState()
-    var selectedFilter by remember { mutableStateOf("ALL") }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(12.dp)
-    ) {
-        // Native System Profiler Controls
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .debugOutline(debugActive),
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    "DEVELOPER PERFORMANCE TUNING",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Show Layout Boundaries", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text("Renders neon pink bounding vectors", fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Switch(
-                        checked = boundariesActive,
-                        onCheckedChange = { viewModel.toggleLayoutBoundaries() },
-                        modifier = Modifier.testTag("layout_boundaries_switch")
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Simulate Profile GPU Rendering", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text("Overlays frame-time performance graph", fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Switch(
-                        checked = gpuProfilingActive,
-                        onCheckedChange = { viewModel.toggleGpuProfiling() },
-                        modifier = Modifier.testTag("gpu_profiling_switch")
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Optimized Cloud Stream (1080p UHD)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(
-                            text = if (streamQualityUHD) "Full HD Resolution @ 60 FPS Locked" else "Standard Definition (Reduced Quality)",
-                            fontSize = 11.sp,
-                            color = if (streamQualityUHD) MaterialTheme.colorScheme.primary else Color.Gray
-                        )
-                    }
-                    Switch(
-                        checked = streamQualityUHD,
-                        onCheckedChange = { viewModel.toggleStreamQuality() },
-                        modifier = Modifier.testTag("stream_quality_switch")
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Input Polling & Low Latency", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(
-                            text = if (inputLatencyOptimized) "Ultra-Low Delay (Sub-5ms Mode Active)" else "Standard Delay (High Latency Input)",
-                            fontSize = 11.sp,
-                            color = if (inputLatencyOptimized) Color(0xFFB6FFB6) else Color.Gray
-                        )
-                    }
-                    Switch(
-                        checked = inputLatencyOptimized,
-                        onCheckedChange = { viewModel.toggleInputLatency() },
-                        modifier = Modifier.testTag("input_latency_switch")
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Diagnostic Console Log filters
-        Text("NATIVE CONSOLE LOGGER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.LightGray)
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            val filters = listOf("ALL", "SYSTEM", "PLAY_SERVICES", "WORK_MANAGER", "DEV_TOOLS", "PERMISSIONS")
-            filters.forEach { filter ->
-                FilterChip(
-                    selected = selectedFilter == filter,
-                    onClick = { selectedFilter = filter },
-                    label = { Text(filter, fontSize = 11.sp) },
-                    modifier = Modifier.testTag("filter_chip_$filter")
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Logging output terminal
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(Color.Black, RoundedCornerShape(16.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-                .padding(10.dp)
-        ) {
-            val filteredLogs = remember(customLogs, selectedFilter) {
-                if (selectedFilter == "ALL") {
-                    customLogs
-                } else {
-                    customLogs.filter { it.tag == selectedFilter }
-                }
-            }
-
-            if (filteredLogs.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No logs matching filter.", fontSize = 11.sp, color = Color.Gray, fontFamily = FontFamily.Monospace)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    reverseLayout = false
-                ) {
-                    items(filteredLogs) { log ->
-                        ConsoleLogItem(log)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ConsoleLogItem(log: ConsoleLog) {
-    val timeFormatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
-    val timeStr = timeFormatter.format(Date(log.timestamp))
-
-    val color = when (log.level) {
-        "DEBUG" -> Color(0xFFB6FFB6)
-        "WARNING" -> Color(0xFFFFCC00)
-        "ERROR" -> Color(0xFFFF3333)
-        else -> Color.White
-    }
-
-    Text(
-        text = "[$timeStr] [${log.tag}] ${log.message}",
-        fontSize = 11.sp,
-        fontFamily = FontFamily.Monospace,
-        color = color,
-        modifier = Modifier.padding(vertical = 2.dp)
-    )
-}
-
-// -------------------------------------------------------------
-// GPU PROFILING SIMULATOR
-// -------------------------------------------------------------
-@Composable
-fun GpuProfilingOverlay(modifier: Modifier = Modifier) {
-    // Generates modern multicolored bars at bottom, representing Draw, Prepare, Process, Execute stages
-    val heights = remember { mutableStateListOf<List<Float>>() }
-    
-    // Periodically update heights for dynamic visual feedback
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(100)
-            if (heights.size > 40) {
-                heights.removeAt(0)
-            }
-            heights.add(
-                listOf(
-                    kotlin.random.Random.nextFloat() * 10f + 2f,  // Draw (Blue)
-                    kotlin.random.Random.nextFloat() * 15f + 4f,  // Prepare (Purple)
-                    kotlin.random.Random.nextFloat() * 8f + 2f,   // Process (Red)
-                    kotlin.random.Random.nextFloat() * 12f + 3f   // Execute (Orange)
-                )
-            )
-        }
-    }
-
-    Column(
+        colors = CardDefaults.cardColors(
+            containerColor = if (ach.isUnlocked) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(16.dp),
         modifier = modifier
-            .fillMaxWidth()
-            .height(100.dp)
-            .background(Color.Black.copy(alpha = 0.85f))
-            .padding(8.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .height(115.dp)
+            .border(
+                1.dp,
+                if (ach.isUnlocked) Color(0xFF81C784).copy(alpha = 0.4f) else Color.White.copy(alpha = 0.05f),
+                RoundedCornerShape(16.dp)
+            )
     ) {
-        Spacer(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.DarkGray))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Simulated GPU Rendering Profile (ms/frame)", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LegendItem("Draw", Color(0xFF0099CC))
-                LegendItem("Prepare", Color(0xFF9933CC))
-                LegendItem("Process", Color(0xFFFF4444))
-                LegendItem("Execute", Color(0xFFFFBB33))
-            }
-        }
-
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+                .padding(8.dp)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val barWidth = 6.dp.toPx()
-                val barGap = 4.dp.toPx()
-                val thresholdY = size.height - (16.6f * (size.height / 45f)) // 16ms boundary line
-                
-                // Draw 16.6ms threshold (60Hz boundary)
-                drawLine(
-                    color = Color.Green,
-                    start = Offset(0f, thresholdY),
-                    end = Offset(size.width, thresholdY),
-                    strokeWidth = 1.dp.toPx()
-                )
-
-                heights.forEachIndexed { colIndex, barHeights ->
-                    val x = size.width - ((heights.size - colIndex) * (barWidth + barGap))
-                    if (x >= 0) {
-                        var currentY = size.height
-                        
-                        // Draw stacked bars
-                        barHeights.forEachIndexed { index, value ->
-                            val segmentHeight = value * (size.height / 45f)
-                            val color = when (index) {
-                                0 -> Color(0xFF0099CC)
-                                1 -> Color(0xFF9933CC)
-                                2 -> Color(0xFFFF4444)
-                                else -> Color(0xFFFFBB33)
-                            }
-                            drawRect(
-                                color = color,
-                                topLeft = Offset(x, currentY - segmentHeight),
-                                size = androidx.compose.ui.geometry.Size(barWidth, segmentHeight)
-                            )
-                            currentY -= segmentHeight
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun LegendItem(label: String, color: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(modifier = Modifier.size(8.dp).background(color))
-        Text(label, fontSize = 8.sp, color = Color.LightGray)
-    }
-}
-
-private fun clampFloat(value: Float, min: Float, max: Float): Float {
-    return if (value < min) min else if (value > max) max else value
-}
-
-@Composable
-fun GitHubTab(viewModel: SystemViewModel) {
-    val context = LocalContext.current
-    val debugActive by viewModel.layoutBoundariesActive.collectAsState()
-
-    val githubToken by viewModel.githubToken.collectAsState()
-    val githubUsername by viewModel.githubUsername.collectAsState()
-    val githubUser by viewModel.githubUser.collectAsState()
-    val githubRepos by viewModel.githubRepos.collectAsState()
-    val isLoadingRepos by viewModel.isLoadingRepos.collectAsState()
-    val reposError by viewModel.reposError.collectAsState()
-
-    val selectedRepo by viewModel.selectedRepo.collectAsState()
-    val releasesList by viewModel.releasesList.collectAsState()
-    val isLoadingReleases by viewModel.isLoadingReleases.collectAsState()
-    val releasesError by viewModel.releasesError.collectAsState()
-
-    val downloadProgress by viewModel.downloadProgress.collectAsState()
-    val downloadingAssetName by viewModel.downloadingAssetName.collectAsState()
-    val downloadedApkFileUri by viewModel.downloadedApkFileUri.collectAsState()
-    val downloadError by viewModel.downloadError.collectAsState()
-    val downloadSuccessMessage by viewModel.downloadSuccessMessage.collectAsState()
-
-    var tokenInput by remember { mutableStateOf(githubToken) }
-    var usernameInput by remember { mutableStateOf(githubUsername) }
-
-    // Synchronize inputs if changed elsewhere
-    LaunchedEffect(githubToken) { tokenInput = githubToken }
-    LaunchedEffect(githubUsername) { usernameInput = githubUsername }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
-            .debugOutline(debugActive),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Banner Header
-        item {
-            Card(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudSync,
-                            contentDescription = "GitHub Native",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "GitHub Integration",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = "Connect accounts, fetch repositories, pull compiled APKs, and install them directly onto your local device.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Active Download / Emulation Setup Notification Card
-        if (downloadProgress != null || downloadedApkFileUri != null || downloadError != null || downloadSuccessMessage != null) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .debugOutline(debugActive),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (downloadError != null) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-                        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+                    .size(36.dp)
+                    .background(
+                        if (ach.isUnlocked) Color(0xFF2E7D32).copy(alpha = 0.2f) else Color(0xFF334155).copy(alpha = 0.3f),
+                        CircleShape
                     ),
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, if (downloadError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (downloadError != null) Icons.Default.ErrorOutline else Icons.Default.DownloadDone,
-                                contentDescription = "Download status",
-                                tint = if (downloadError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Text(
-                                text = if (downloadProgress != null) "DOWNLOADING APK..." else if (downloadError != null) "DOWNLOAD FAILED" else "APK READY FOR EMULATION",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (downloadError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
-                            )
-                        }
-
-                        if (downloadProgress != null) {
-                            val pct = downloadProgress!!
-                            Text(
-                                text = "Pulling ${downloadingAssetName ?: "APK"} from GitHub releases...",
-                                fontSize = 12.sp,
-                                color = Color.LightGray
-                            )
-                            LinearProgressIndicator(
-                                progress = { pct },
-                                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                            Text(
-                                text = "Progress: ${String.format("%.1f", pct * 100)}%",
-                                fontSize = 11.sp,
-                                color = Color.Gray,
-                                modifier = Modifier.align(Alignment.End)
-                            )
-                        }
-
-                        if (downloadError != null) {
-                            Text(text = "Error: ${downloadError}", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-                        }
-
-                        if (downloadSuccessMessage != null) {
-                            Text(text = downloadSuccessMessage!!, fontSize = 12.sp, color = Color.White)
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (downloadedApkFileUri != null) {
-                                Button(
-                                    onClick = {
-                                        viewModel.installApk(context, downloadedApkFileUri!!)
-                                    },
-                                    modifier = Modifier.weight(1f).testTag("install_pulled_apk_btn"),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = "Run")
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Run Emulation (Install)")
-                                }
-                            }
-
-                            Button(
-                                onClick = { viewModel.clearDownloadState() },
-                                modifier = if (downloadedApkFileUri == null) Modifier.fillMaxWidth() else Modifier.weight(0.5f).testTag("clear_apk_state_btn"),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Text("Clear", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Credentials & Authentication Card
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .debugOutline(debugActive),
-                shape = RoundedCornerShape(24.dp)
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "GITHUB AUTHENTICATION",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    if (githubUser != null) {
-                        // User Profile UI
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Circular Letter Avatar
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .background(MaterialTheme.colorScheme.secondary, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = (githubUser!!.name ?: githubUser!!.login).take(1).uppercase(),
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSecondary
-                                )
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = githubUser!!.name ?: githubUser!!.login,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "@${githubUser!!.login}",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (!githubUser!!.bio.isNullOrEmpty()) {
-                                    Text(
-                                        text = githubUser!!.bio!!,
-                                        fontSize = 11.sp,
-                                        color = Color.Gray,
-                                        maxLines = 2
-                                    )
-                                }
-                            }
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${githubUser!!.public_repos} Public Repositories Loaded",
-                                fontSize = 12.sp,
-                                color = Color.LightGray
-                            )
-                            TextButton(
-                                onClick = {
-                                    viewModel.saveGitHubCredentials("", "")
-                                },
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Icon(Icons.Default.Logout, contentDescription = "Disconnect", modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Disconnect", fontSize = 12.sp)
-                            }
-                        }
-                    } else {
-                        // Inputs UI
-                        OutlinedTextField(
-                            value = usernameInput,
-                            onValueChange = { usernameInput = it },
-                            label = { Text("GitHub Username") },
-                            placeholder = { Text("e.g. isleepy20") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = "User") },
-                            modifier = Modifier.fillMaxWidth().testTag("github_username_input"),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = tokenInput,
-                            onValueChange = { tokenInput = it },
-                            label = { Text("Personal Access Token (PAT) - Optional") },
-                            placeholder = { Text("ghp_...") },
-                            leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = "Token") },
-                            modifier = Modifier.fillMaxWidth().testTag("github_token_input"),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-
-                        Text(
-                            text = "💡 Direct public queries are limited by GitHub rate limits. Providing a PAT resolves limits and accesses private repositories.",
-                            fontSize = 10.sp,
-                            color = Color.Gray
-                        )
-
-                        Button(
-                            onClick = {
-                                viewModel.saveGitHubCredentials(tokenInput.trim(), usernameInput.trim())
-                            },
-                            modifier = Modifier.fillMaxWidth().testTag("connect_github_btn"),
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = usernameInput.isNotEmpty() || tokenInput.isNotEmpty()
-                        ) {
-                            if (isLoadingRepos) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
-                            } else {
-                                Icon(Icons.Default.Login, contentDescription = "Connect")
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Load GitHub Repositories")
-                            }
+                Text(
+                    text = ach.icon,
+                    fontSize = 18.sp,
+                    modifier = Modifier.drawBehind {
+                        if (!ach.isUnlocked) {
+                            // Subtle grayscale draw
                         }
                     }
-
-                    if (reposError != null) {
-                        Text(
-                            text = "Sync Error: $reposError",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
+                )
             }
-        }
-
-        // Repository list / selected repo detail
-        if (githubUser != null) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (selectedRepo == null) "SELECT A REPOSITORY" else "REPOSITORY INFO",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    if (selectedRepo != null) {
-                        TextButton(onClick = { viewModel.selectRepo(null) }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Back to list", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-
-            if (selectedRepo == null) {
-                // List Repos
-                if (githubRepos.isEmpty() && !isLoadingRepos) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        ) {
-                            Text(
-                                text = "No repositories found for this account.",
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(16.dp),
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                } else {
-                    items(githubRepos) { repo ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.selectRepo(repo) }
-                                .debugOutline(debugActive),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Top
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = repo.name,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                        Text(
-                                            text = repo.full_name,
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Star,
-                                                contentDescription = "Stars",
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                            Text(
-                                                text = repo.stargazers_count.toString(),
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-
-                                if (!repo.description.isNullOrEmpty()) {
-                                    Text(
-                                        text = repo.description!!,
-                                        fontSize = 12.sp,
-                                        color = Color.LightGray,
-                                        maxLines = 2
-                                    )
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (!repo.language.isNullOrEmpty()) {
-                                        SuggestionChip(
-                                            onClick = {},
-                                            label = { Text(repo.language!!, fontSize = 10.sp) }
-                                        )
-                                    } else {
-                                        Spacer(modifier = Modifier.width(1.dp))
-                                    }
-
-                                    Text(
-                                        text = "View Releases →",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Show Repository Details & Releases
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = selectedRepo!!.name.uppercase(),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                            Text(
-                                text = selectedRepo!!.description ?: "No description provided",
-                                fontSize = 12.sp,
-                                color = Color.LightGray
-                            )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Text("Language: ${selectedRepo!!.language ?: "Unknown"}", fontSize = 11.sp, color = Color.Gray)
-                                Text("Stars: ${selectedRepo!!.stargazers_count}", fontSize = 11.sp, color = Color.Gray)
-                                Text("Forks: ${selectedRepo!!.forks_count}", fontSize = 11.sp, color = Color.Gray)
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    Text(
-                        text = "COMPILED RELEASES & APK ASSETS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.LightGray,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                if (isLoadingReleases) {
-                    item {
-                        Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                } else if (releasesError != null) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f))
-                        ) {
-                            Text(
-                                text = "Failed to load releases: $releasesError",
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(16.dp),
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                } else if (releasesList.isEmpty()) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = "No releases found.",
-                                    fontSize = 12.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "To deploy APKs through this module, compile your project in GitHub and create a Release containing the output `.apk` file.",
-                                    fontSize = 11.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    items(releasesList) { release ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .debugOutline(debugActive),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = release.name ?: release.tag_name,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(6.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = release.tag_name,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    }
-                                }
-
-                                if (!release.body.isNullOrEmpty()) {
-                                    Text(
-                                        text = release.body!!,
-                                        fontSize = 11.sp,
-                                        color = Color.Gray,
-                                        maxLines = 3
-                                    )
-                                }
-
-                                val apkAssets = remember(release) {
-                                    release.assets.filter { it.name.endsWith(".apk") }
-                                }
-
-                                if (apkAssets.isEmpty()) {
-                                    Text(
-                                        text = "⚠️ No compiled .apk assets found in this release.",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                } else {
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                                    Text("Download Assets:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    
-                                    apkAssets.forEach { asset ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = asset.name,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White,
-                                                    maxLines = 1
-                                                )
-                                                Text(
-                                                    text = "Size: ${String.format("%.2f", asset.size / (1024.0 * 1024.0))} MB • Downloads: ${asset.download_count}",
-                                                    fontSize = 10.sp,
-                                                    color = Color.Gray
-                                                )
-                                            }
-
-                                            IconButton(
-                                                onClick = {
-                                                    viewModel.downloadApk(asset, selectedRepo!!.name)
-                                                },
-                                                modifier = Modifier.size(36.dp).testTag("download_apk_${asset.id}")
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Download,
-                                                    contentDescription = "Download APK",
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            Text(
+                text = ach.title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                color = if (ach.isUnlocked) Color.White else Color.Gray,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            
+            Text(
+                text = ach.description,
+                fontSize = 8.sp,
+                color = if (ach.isUnlocked) Color.LightGray else Color.Gray.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                lineHeight = 10.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

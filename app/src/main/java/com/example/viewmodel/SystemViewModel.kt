@@ -1,741 +1,517 @@
 package com.example.viewmodel
 
 import android.app.Application
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.Context
-import android.content.Intent
-import android.os.Build
-import android.view.Choreographer
-import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.MainActivity
 import com.example.data.database.AppDatabase
-import com.example.data.database.JobLog
-import com.example.data.repository.JobRepository
-import com.example.data.network.*
-import android.net.Uri
-import java.io.File
-import java.io.FileOutputStream
-import okhttp3.OkHttpClient
+import com.example.data.database.GameState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.pow
 import kotlin.random.Random
+
+data class UpgradeItem(
+    val id: String,
+    val name: String,
+    val description: String,
+    val baseCost: Double,
+    val costMultiplier: Double,
+    val effectValue: Double,
+    val isCps: Boolean, // true for CpS, false for Click Power
+    val count: Int,
+    val icon: String // Emoji representation
+) {
+    val currentCost: Double
+        get() = baseCost * costMultiplier.pow(count)
+}
+
+data class Achievement(
+    val id: String,
+    val title: String,
+    val description: String,
+    val isUnlocked: Boolean,
+    val icon: String
+)
+
+data class FloatingText(
+    val id: Long,
+    val text: String,
+    val xOffset: Float,
+    val yOffset: Float,
+    val scale: Float = 1.0f,
+    val isFever: Boolean = false
+)
+
+data class GoldenCookieState(
+    val isVisible: Boolean = false,
+    val xPercent: Float = 0.5f,
+    val yPercent: Float = 0.5f,
+    val size: Float = 60f
+)
 
 class SystemViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val database = AppDatabase.getDatabase(application)
-    private val repository = JobRepository(database.jobLogDao())
+    private val db = AppDatabase.getDatabase(application)
+    private val dao = db.gameStateDao()
 
-    // UI state flows
-    val jobLogs: StateFlow<List<JobLog>> = repository.allLogs
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Primary state variables
+    private val _currentCookies = MutableStateFlow(0.0)
+    val currentCookies: StateFlow<Double> = _currentCookies.asStateFlow()
 
-    // System Diagnostics
-    private val _fps = MutableStateFlow(60.0)
-    val fps: StateFlow<Double> = _fps.asStateFlow()
+    private val _totalCookiesBaked = MutableStateFlow(0.0)
+    val totalCookiesBaked: StateFlow<Double> = _totalCookiesBaked.asStateFlow()
 
-    private val _fpsHistory = MutableStateFlow<List<Float>>(List(20) { 60f })
-    val fpsHistory: StateFlow<List<Float>> = _fpsHistory.asStateFlow()
+    private val _totalClicks = MutableStateFlow(0L)
+    val totalClicks: StateFlow<Long> = _totalClicks.asStateFlow()
 
-    private val _cpuLoad = MutableStateFlow(12)
-    val cpuLoad: StateFlow<Int> = _cpuLoad.asStateFlow()
+    // Upgrades lists
+    private val _upgrades = MutableStateFlow<List<UpgradeItem>>(emptyList())
+    val upgrades: StateFlow<List<UpgradeItem>> = _upgrades.asStateFlow()
 
-    private val _ramUsage = MutableStateFlow(4.2) // GB
-    val ramUsage: StateFlow<Double> = _ramUsage.asStateFlow()
+    // Achievements list
+    private val _achievements = MutableStateFlow<List<Achievement>>(emptyList())
+    val achievements: StateFlow<List<Achievement>> = _achievements.asStateFlow()
 
-    // Play Services Settings (Simulated + Actual state integration)
-    private val _playServicesStatus = MutableStateFlow("AVAILABLE") // AVAILABLE, OUT_OF_DATE, MISSING, SUSPENDED
-    val playServicesStatus: StateFlow<String> = _playServicesStatus.asStateFlow()
+    // Floating text list (click visual indicator)
+    private val _floatingTexts = MutableStateFlow<List<FloatingText>>(emptyList())
+    val floatingTexts: StateFlow<List<FloatingText>> = _floatingTexts.asStateFlow()
 
-    private val _gpsLocationConnected = MutableStateFlow(true)
-    val gpsLocationConnected: StateFlow<Boolean> = _gpsLocationConnected.asStateFlow()
+    // Golden Cookie (Fever Event) State
+    private val _goldenCookie = MutableStateFlow(GoldenCookieState())
+    val goldenCookie: StateFlow<GoldenCookieState> = _goldenCookie.asStateFlow()
 
-    private val _fcmToken = MutableStateFlow("fcm_token_native_android15_v35_90a7b4c")
-    val fcmToken: StateFlow<String> = _fcmToken.asStateFlow()
+    // Fever Mode details
+    private val _feverActive = MutableStateFlow(false)
+    val feverActive: StateFlow<Boolean> = _feverActive.asStateFlow()
 
-    // Debug Options
-    private val _layoutBoundariesActive = MutableStateFlow(false)
-    val layoutBoundariesActive: StateFlow<Boolean> = _layoutBoundariesActive.asStateFlow()
+    private val _feverMultiplier = MutableStateFlow(1)
+    val feverMultiplier: StateFlow<Int> = _feverMultiplier.asStateFlow()
 
-    private val _gpuProfilingActive = MutableStateFlow(false)
-    val gpuProfilingActive: StateFlow<Boolean> = _gpuProfilingActive.asStateFlow()
+    private val _feverSecondsRemaining = MutableStateFlow(0)
+    val feverSecondsRemaining: StateFlow<Int> = _feverSecondsRemaining.asStateFlow()
 
-    private val _streamQualityUHD = MutableStateFlow(true)
-    val streamQualityUHD: StateFlow<Boolean> = _streamQualityUHD.asStateFlow()
+    // Live Cookie production chart data (last 30 seconds)
+    private val _productionHistory = MutableStateFlow<List<Double>>(List(30) { 0.0 })
+    val productionHistory: StateFlow<List<Double>> = _productionHistory.asStateFlow()
 
-    private val _inputLatencyOptimized = MutableStateFlow(true)
-    val inputLatencyOptimized: StateFlow<Boolean> = _inputLatencyOptimized.asStateFlow()
+    // Offline Earnings Popup
+    private val _offlineEarnings = MutableStateFlow<Double?>(null)
+    val offlineEarnings: StateFlow<Double?> = _offlineEarnings.asStateFlow()
 
-    private val _customLogs = MutableStateFlow<List<ConsoleLog>>(emptyList())
-    val customLogs: StateFlow<List<ConsoleLog>> = _customLogs.asStateFlow()
+    private val _offlineSeconds = MutableStateFlow(0L)
+    val offlineSeconds: StateFlow<Long> = _offlineSeconds.asStateFlow()
 
-    private val _selectedTab = MutableStateFlow(0)
-    val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
-
-    // Active background task tracking
-    private val _activeTasksCount = MutableStateFlow(0)
-    val activeTasksCount: StateFlow<Int> = _activeTasksCount.asStateFlow()
-
-    // --- GitHub Integration State ---
-    private val _githubToken = MutableStateFlow("")
-    val githubToken: StateFlow<String> = _githubToken.asStateFlow()
-
-    private val _githubUsername = MutableStateFlow("")
-    val githubUsername: StateFlow<String> = _githubUsername.asStateFlow()
-
-    private val _githubUser = MutableStateFlow<GitHubUser?>(null)
-    val githubUser: StateFlow<GitHubUser?> = _githubUser.asStateFlow()
-
-    private val _githubRepos = MutableStateFlow<List<GitHubRepo>>(emptyList())
-    val githubRepos: StateFlow<List<GitHubRepo>> = _githubRepos.asStateFlow()
-
-    private val _isLoadingRepos = MutableStateFlow(false)
-    val isLoadingRepos: StateFlow<Boolean> = _isLoadingRepos.asStateFlow()
-
-    private val _reposError = MutableStateFlow<String?>(null)
-    val reposError: StateFlow<String?> = _reposError.asStateFlow()
-
-    private val _selectedRepo = MutableStateFlow<GitHubRepo?>(null)
-    val selectedRepo: StateFlow<GitHubRepo?> = _selectedRepo.asStateFlow()
-
-    private val _releasesList = MutableStateFlow<List<GitHubRelease>>(emptyList())
-    val releasesList: StateFlow<List<GitHubRelease>> = _releasesList.asStateFlow()
-
-    private val _isLoadingReleases = MutableStateFlow(false)
-    val isLoadingReleases: StateFlow<Boolean> = _isLoadingReleases.asStateFlow()
-
-    private val _releasesError = MutableStateFlow<String?>(null)
-    val releasesError: StateFlow<String?> = _releasesError.asStateFlow()
-
-    private val _downloadProgress = MutableStateFlow<Float?>(null)
-    val downloadProgress: StateFlow<Float?> = _downloadProgress.asStateFlow()
-
-    private val _downloadingAssetName = MutableStateFlow<String?>(null)
-    val downloadingAssetName: StateFlow<String?> = _downloadingAssetName.asStateFlow()
-
-    private val _downloadedApkFileUri = MutableStateFlow<String?>(null)
-    val downloadedApkFileUri: StateFlow<String?> = _downloadedApkFileUri.asStateFlow()
-
-    private val _downloadError = MutableStateFlow<String?>(null)
-    val downloadError: StateFlow<String?> = _downloadError.asStateFlow()
-
-    private val _downloadSuccessMessage = MutableStateFlow<String?>(null)
-    val downloadSuccessMessage: StateFlow<String?> = _downloadSuccessMessage.asStateFlow()
-
-    // --- Android 15 Emulator States ---
-    private val _emulatedCurrentApp = MutableStateFlow<String?>(null)
-    val emulatedCurrentApp: StateFlow<String?> = _emulatedCurrentApp.asStateFlow()
-
-    private val _emulatedRecentApps = MutableStateFlow<List<String>>(emptyList())
-    val emulatedRecentApps: StateFlow<List<String>> = _emulatedRecentApps.asStateFlow()
-
-    private val _emulatedWifiOn = MutableStateFlow(true)
-    val emulatedWifiOn: StateFlow<Boolean> = _emulatedWifiOn.asStateFlow()
-
-    private val _emulatedBluetoothOn = MutableStateFlow(true)
-    val emulatedBluetoothOn: StateFlow<Boolean> = _emulatedBluetoothOn.asStateFlow()
-
-    private val _emulatedDarkModeOn = MutableStateFlow(true)
-    val emulatedDarkModeOn: StateFlow<Boolean> = _emulatedDarkModeOn.asStateFlow()
-
-    private val _emulatedFlashlightOn = MutableStateFlow(false)
-    val emulatedFlashlightOn: StateFlow<Boolean> = _emulatedFlashlightOn.asStateFlow()
-
-    private val _emulatedBatterySaverOn = MutableStateFlow(false)
-    val emulatedBatterySaverOn: StateFlow<Boolean> = _emulatedBatterySaverOn.asStateFlow()
-
-    private val _emulatedNotificationDrawerOpen = MutableStateFlow(false)
-    val emulatedNotificationDrawerOpen: StateFlow<Boolean> = _emulatedNotificationDrawerOpen.asStateFlow()
-
-    private val _emulatedInstalledApps = MutableStateFlow<List<String>>(
-        listOf(
-            "Diagnostics", "Settings", "Chrome", "GitHub", "Play Store",
-            "Play Services Status", "WorkManager Logs", "Dev Toggles",
-            "Dialer", "Messages", "Camera", "Calculator", "Clock", "Gemini AI"
-        )
-    )
-    val emulatedInstalledApps: StateFlow<List<String>> = _emulatedInstalledApps.asStateFlow()
-
-    private val _emulatedBrowserUrl = MutableStateFlow("https://google.com")
-    val emulatedBrowserUrl: StateFlow<String> = _emulatedBrowserUrl.asStateFlow()
-
-    private val _emulatedSettingsSection = MutableStateFlow("Main")
-    val emulatedSettingsSection: StateFlow<String> = _emulatedSettingsSection.asStateFlow()
-
-    private val _emulatedRecentsOpen = MutableStateFlow(false)
-    val emulatedRecentsOpen: StateFlow<Boolean> = _emulatedRecentsOpen.asStateFlow()
-
-    // System constants
-    val sdkVersion = Build.VERSION.SDK_INT
-    val codename = Build.VERSION.CODENAME
-    val model = Build.MODEL
-    val manufacturer = Build.MANUFACTURER
-
-    private var frameCallback: Choreographer.FrameCallback? = null
-    private var lastFrameTimeNanos: Long = 0
+    private var nextFloatingTextId = 0L
 
     init {
-        createNotificationChannel()
-        addLog("SYSTEM", "Initialized System Console. Native SDK API: $sdkVersion", "INFO")
-        addLog("PLAY_SERVICES", "Checked Google Play Services. Found version 24.18.22. Status: AVAILABLE", "INFO")
-        addLog("DATABASE", "SQLite Room local DB connected successfully", "INFO")
-        addLog("DEV_TOOLS", "Streaming pipeline optimized. Resolution locked to Full HD 1080p (60 FPS)", "INFO")
-        addLog("DEV_TOOLS", "Input polling optimized: Ultra-Low Latency Mode (Sub-5ms / 1000Hz)", "INFO")
-        
-        // Start live hardware emulation loop
-        startHardwareMonitor()
-        // Start Choreographer Frame Rate Tracker
-        startFpsTracker()
-        
-        // Populate initial mock log if empty to show first launch state beautifully
-        viewModelScope.launch(Dispatchers.IO) {
-            val count = database.jobLogDao().getAllLogs().firstOrNull()?.size ?: 0
-            if (count == 0) {
-                repository.insertLog(
-                    JobLog(
-                        jobName = "Initialization Sync",
-                        status = "SUCCESS",
-                        payloadSize = "1.2 KB",
-                        executionTimeMs = 450,
-                        message = "Native environment synced. Edge-to-Edge configured successfully."
-                    )
-                )
-            }
-        }
-        loadGitHubCredentials()
-    }
+        setupDefaultUpgradesAndAchievements()
+        loadGame()
 
-    fun setSelectedTab(index: Int) {
-        _selectedTab.value = index
-    }
-
-    fun toggleLayoutBoundaries() {
-        _layoutBoundariesActive.value = !_layoutBoundariesActive.value
-        addLog("DEV_TOOLS", "Layout Boundaries toggled: ${_layoutBoundariesActive.value}", "DEBUG")
-    }
-
-    fun toggleGpuProfiling() {
-        _gpuProfilingActive.value = !_gpuProfilingActive.value
-        addLog("DEV_TOOLS", "GPU Profile Overlay toggled: ${_gpuProfilingActive.value}", "DEBUG")
-    }
-
-    fun toggleStreamQuality() {
-        _streamQualityUHD.value = !_streamQualityUHD.value
-        val quality = if (_streamQualityUHD.value) "1080p Ultra-HD (60 FPS)" else "Standard SD (Compressed)"
-        addLog("DEV_TOOLS", "Stream Resolution Override configured: $quality", "INFO")
-        addLog("SYSTEM", "Display pipeline buffer resized. Resolution locked to ${if (_streamQualityUHD.value) "1920x1080" else "854x480"}", "DEBUG")
-    }
-
-    fun toggleInputLatency() {
-        _inputLatencyOptimized.value = !_inputLatencyOptimized.value
-        val mode = if (_inputLatencyOptimized.value) "Ultra-Low Latency Mode (Sub-5ms / 1000Hz touch polling)" else "Standard Mode (120Hz polling)"
-        addLog("DEV_TOOLS", "Input transmission protocol optimized: $mode", "INFO")
-        addLog("SYSTEM", "Cloud input sampling delay set to ${if (_inputLatencyOptimized.value) "1ms" else "25ms"}", "DEBUG")
-    }
-
-    fun updatePlayServicesStatus(status: String) {
-        _playServicesStatus.value = status
-        addLog("PLAY_SERVICES", "Google Play Services emulator state override: $status", "WARNING")
-    }
-
-    fun toggleGpsLocation() {
-        _gpsLocationConnected.value = !_gpsLocationConnected.value
-        val state = if (_gpsLocationConnected.value) "CONNECTED" else "DISCONNECTED"
-        addLog("PLAY_SERVICES", "Google Location Provider Client $state", if (_gpsLocationConnected.value) "INFO" else "WARNING")
-    }
-
-    fun regenerateFcmToken() {
-        val randomHex = (1..8).map { "0123456789abcdef"[Random.nextInt(16)] }.joinToString("")
-        _fcmToken.value = "fcm_token_native_android15_v35_$randomHex"
-        addLog("PLAY_SERVICES", "FCM Registration Token rotated successfully: ${_fcmToken.value}", "INFO")
-        sendNativeNotification("FCM Token Rotated", "New secure token registered on background sync channel.")
-    }
-
-    fun triggerBackgroundTask(jobName: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _activeTasksCount.value += 1
-            addLog("WORK_MANAGER", "WorkManager queued unique periodic job: $jobName", "INFO")
-            
-            val initialLog = JobLog(
-                jobName = jobName,
-                status = "RUNNING",
-                payloadSize = "0.0 KB",
-                executionTimeMs = 0,
-                message = "WorkManager thread acquired. Syncing payload with Google Play Services gateway..."
-            )
-            repository.insertLog(initialLog)
-            
-            // Simulating execution
-            delay(150)
-            
-            _activeTasksCount.value = maxOf(0, _activeTasksCount.value - 1)
-            val isSuccess = Random.nextFloat() > 0.05 // lower fail rate since it is optimized
-            val kbSynced = String.format("%.1f KB", Random.nextDouble(1.0, 48.0))
-            val execTime = Random.nextLong(30, 80)
-            val status = if (isSuccess) "SUCCESS" else "FAILED"
-            val detailMsg = if (isSuccess) {
-                "WorkManager task successfully completed. Synced $kbSynced telemetry in ${execTime}ms."
-            } else {
-                "WorkManager encountered transient synchronization error (HTTP 503 Gateway Timeout)."
-            }
-            
-            repository.insertLog(
-                JobLog(
-                    jobName = jobName,
-                    status = status,
-                    payloadSize = if (isSuccess) kbSynced else "0.0 KB",
-                    executionTimeMs = execTime,
-                    message = detailMsg
-                )
-            )
-            
-            addLog(
-                "WORK_MANAGER",
-                "WorkManager finished $jobName. Status: $status. Duration: ${execTime}ms.",
-                if (isSuccess) "INFO" else "ERROR"
-            )
-
-            if (isSuccess) {
-                sendNativeNotification(
-                    "Sync Successful",
-                    "$jobName completed natively on Android 15 platform. Synced $kbSynced."
-                )
-            } else {
-                sendNativeNotification(
-                    "Sync Failed",
-                    "$jobName failed. Android 15 WorkManager will retry with exponential backoff."
-                )
-            }
-        }
-    }
-
-    fun clearAllJobLogs() {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.clearAllLogs()
-            addLog("DATABASE", "Job logs table truncated.", "INFO")
-        }
-    }
-
-    fun addManualLog(tag: String, message: String, level: String) {
-        addLog(tag, message, level)
-    }
-
-    private fun addLog(tag: String, message: String, level: String) {
-        val newLog = ConsoleLog(
-            timestamp = System.currentTimeMillis(),
-            tag = tag,
-            message = message,
-            level = level
-        )
-        _customLogs.update { current ->
-            (listOf(newLog) + current).take(150) // keep last 150 logs in memory
-        }
-    }
-
-    private fun startHardwareMonitor() {
-        viewModelScope.launch(Dispatchers.IO) {
+        // Core Game Loop: 10 ticks per second for smooth updates
+        viewModelScope.launch {
             while (true) {
-                delay(2000)
-                // Fluctuating stats for realistic rendering
-                val activeCount = _activeTasksCount.value
-                val baseCpu = if (activeCount > 0) 35 else 5
-                _cpuLoad.value = clamp(baseCpu + Random.nextInt(-3, 6), 1, 99)
-                _ramUsage.value = String.format("%.2f", 4.12 + Random.nextDouble(-0.15, 0.35)).toDouble()
+                delay(100)
+                tickGame(0.1)
             }
         }
-    }
 
-    private fun startFpsTracker() {
-        var frameCount = 0
-        var lastFpsUpdateTimeNanos = 0L
+        // Live stats history logger (every 1 second)
+        viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                updateHistory()
+            }
+        }
 
-        frameCallback = object : Choreographer.FrameCallback {
-            override fun doFrame(frameTimeNanos: Long) {
-                frameCount++
-                if (lastFpsUpdateTimeNanos == 0L) {
-                    lastFpsUpdateTimeNanos = frameTimeNanos
-                } else {
-                    val elapsedNanos = frameTimeNanos - lastFpsUpdateTimeNanos
-                    if (elapsedNanos >= 1_000_000_000L) { // Rate limit FPS updates to exactly once per second
-                        val elapsedSeconds = elapsedNanos / 1_000_000_000.0
-                        val calculatedFps = clampDouble(frameCount / elapsedSeconds, 10.0, 60.1)
-                        _fps.value = calculatedFps
-                        _fpsHistory.update { history ->
-                            (history + calculatedFps.toFloat()).takeLast(20)
-                        }
-                        frameCount = 0
-                        lastFpsUpdateTimeNanos = frameTimeNanos
-                    }
+        // Periodic Autosave (every 5 seconds)
+        viewModelScope.launch {
+            while (true) {
+                delay(5000)
+                saveGame()
+            }
+        }
+
+        // Golden Cookie Spawner loop
+        viewModelScope.launch {
+            while (true) {
+                // Spawn golden cookie every 30 to 75 seconds
+                val nextSpawnSeconds = Random.nextLong(30, 75)
+                delay(nextSpawnSeconds * 1000)
+                if (!_goldenCookie.value.isVisible && !_feverActive.value) {
+                    spawnGoldenCookie()
                 }
-                Choreographer.getInstance().postFrameCallback(this)
             }
         }
-        Choreographer.getInstance().postFrameCallback(frameCallback!!)
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        frameCallback?.let {
-            Choreographer.getInstance().removeFrameCallback(it)
-        }
-    }
+    private fun setupDefaultUpgradesAndAchievements() {
+        _upgrades.value = listOf(
+            // Click upgrades
+            UpgradeItem("click_spatula", "Plastic Spatula", "+1 Cookie per click.", 15.0, 1.15, 1.0, false, 0, "🥄"),
+            UpgradeItem("click_pin", "Golden Pin", "+5 Cookies per click.", 120.0, 1.16, 5.0, false, 0, "🥖"),
+            UpgradeItem("click_engine", "Choco Motor", "+25 Cookies per click.", 1100.0, 1.18, 25.0, false, 0, "⚙️"),
+            UpgradeItem("click_oven", "Cosmic Oven", "+100 Cookies per click.", 12000.0, 1.20, 100.0, false, 0, "🌋"),
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val context = getApplication<Application>().applicationContext
-            val name = "System Console Notifications"
-            val descriptionText = "Real-time updates of background tasks"
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel("system_console_channel", name, importance).apply {
-                description = descriptionText
-                enableVibration(true)
-            }
-            val notificationManager: NotificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun sendNativeNotification(title: String, message: String) {
-        val context = getApplication<Application>().applicationContext
-        
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            // CpS upgrades
+            UpgradeItem("cps_cursor", "Auto-Clicker", "Clicker cursor. +0.1 CpS.", 15.0, 1.15, 0.1, true, 0, "🖱️"),
+            UpgradeItem("cps_grandma", "Grandma", "Experienced baker. +1.0 CpS.", 100.0, 1.15, 1.0, true, 0, "👵"),
+            UpgradeItem("cps_bakery", "Bakery", "Full-scale store. +8.0 CpS.", 1100.0, 1.15, 8.0, true, 0, "🏪"),
+            UpgradeItem("cps_factory", "Factory", "Mass baker. +47.0 CpS.", 12000.0, 1.15, 47.0, true, 0, "🏭"),
+            UpgradeItem("cps_portal", "Space Portal", "Interdimensional. +260.0 CpS.", 130000.0, 1.15, 260.0, true, 0, "🌀"),
+            UpgradeItem("cps_time", "Time Machine", "Bakes from past. +1400.0 CpS.", 1400000.0, 1.15, 1400.0, true, 0, "⏳")
         )
 
-        val builder = NotificationCompat.Builder(context, "system_console_channel")
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(Random.nextInt(100000), builder.build())
+        _achievements.value = listOf(
+            Achievement("ach_first", "First Bake", "Bake your first cookie!", false, "🍪"),
+            Achievement("ach_100", "Novice Baker", "Bake 100 total cookies.", false, "🥞"),
+            Achievement("ach_10k", "Cookie Baron", "Bake 10,000 total cookies.", false, "👑"),
+            Achievement("ach_1m", "Megabake", "Bake 1,000,000 total cookies.", false, "🌌"),
+            Achievement("ach_clicks_50", "Active Clicker", "Click the giant cookie 50 times.", false, "⚡"),
+            Achievement("ach_clicks_500", "Tap Master", "Click the giant cookie 500 times.", false, "🎯"),
+            Achievement("ach_golden", "Golden Touch", "Click a Golden Cookie!", false, "✨"),
+            Achievement("ach_grandmas_5", "Grandma Army", "Have at least 5 Grandmas.", false, "💖"),
+            Achievement("ach_factories_3", "Industrial Age", "Have at least 3 Cookie Factories.", false, "⚙️")
+        )
     }
 
-    // --- GitHub Integration Methods ---
-
-    fun saveGitHubCredentials(token: String, username: String) {
-        val context = getApplication<Application>().applicationContext
-        val prefs = context.getSharedPreferences("github_prefs", Context.MODE_PRIVATE)
-        prefs.edit().apply {
-            putString("token", token)
-            putString("username", username)
-            apply()
-        }
-        _githubToken.value = token
-        _githubUsername.value = username
-        
-        addLog("GITHUB", "Credentials updated. Username: $username. PAT present: ${token.isNotEmpty()}", "INFO")
-        
-        // Reset old data
-        _githubUser.value = null
-        _githubRepos.value = emptyList()
-        _selectedRepo.value = null
-        _releasesList.value = emptyList()
-        _reposError.value = null
-        _releasesError.value = null
-
-        // Trigger updates
-        syncGitHubData()
-    }
-
-    fun loadGitHubCredentials() {
-        val context = getApplication<Application>().applicationContext
-        val prefs = context.getSharedPreferences("github_prefs", Context.MODE_PRIVATE)
-        val token = prefs.getString("token", "") ?: ""
-        val username = prefs.getString("username", "") ?: ""
-        _githubToken.value = token
-        _githubUsername.value = username
-        
-        if (username.isNotEmpty()) {
-            addLog("GITHUB", "Credentials loaded. Syncing data for $username...", "INFO")
-            syncGitHubData()
-        }
-    }
-
-    fun syncGitHubData() {
-        viewModelScope.launch {
-            val username = _githubUsername.value
-            val token = _githubToken.value
-            
-            if (username.isEmpty() && token.isEmpty()) {
-                _reposError.value = "Username or Token is required"
-                return@launch
-            }
-
-            _isLoadingRepos.value = true
-            _reposError.value = null
-            addLog("GITHUB", "Fetching user profile and repositories...", "INFO")
-
-            try {
-                val authHeader = if (token.isNotEmpty()) "token $token" else null
-                
-                // 1. Fetch User Profile
-                val user = if (token.isNotEmpty()) {
-                    GitHubApiClient.service.getAuthenticatedUser(authHeader!!)
-                } else {
-                    GitHubApiClient.service.getUser(username, authHeader)
-                }
-                _githubUser.value = user
-                
-                // Auto-sync username text field if they logged in with token
-                if (token.isNotEmpty() && _githubUsername.value.isEmpty()) {
-                    _githubUsername.value = user.login
-                }
-                addLog("GITHUB", "User profile fetched: ${user.name ?: user.login} (${user.public_repos} public repos)", "SUCCESS")
-
-                // 2. Fetch Repositories
-                val repos = if (token.isNotEmpty()) {
-                    GitHubApiClient.service.getAuthenticatedUserRepos(authHeader!!)
-                } else {
-                    GitHubApiClient.service.getUserRepos(username, authHeader)
-                }
-                _githubRepos.value = repos
-                addLog("GITHUB", "Successfully loaded ${repos.size} repositories.", "SUCCESS")
-            } catch (e: Exception) {
-                _reposError.value = e.message ?: "Failed to load GitHub data"
-                addLog("GITHUB", "Sync failed: ${e.message}", "ERROR")
-            } finally {
-                _isLoadingRepos.value = false
-            }
-        }
-    }
-
-    fun fetchRepoReleases(owner: String, repoName: String) {
-        viewModelScope.launch {
-            _isLoadingReleases.value = true
-            _releasesError.value = null
-            _releasesList.value = emptyList()
-            addLog("GITHUB", "Loading releases for $owner/$repoName...", "INFO")
-
-            try {
-                val token = _githubToken.value
-                val authHeader = if (token.isNotEmpty()) "token $token" else null
-                
-                val releases = GitHubApiClient.service.getReleases(owner, repoName, authHeader)
-                _releasesList.value = releases
-                addLog("GITHUB", "Loaded ${releases.size} releases for $repoName", "SUCCESS")
-                
-                if (releases.isEmpty()) {
-                    addLog("GITHUB", "No releases found for $repoName. Ensure your GitHub Action or release compiles an APK.", "WARNING")
-                }
-            } catch (e: Exception) {
-                _releasesError.value = e.message ?: "Failed to load releases"
-                addLog("GITHUB", "Failed loading releases: ${e.message}", "ERROR")
-            } finally {
-                _isLoadingReleases.value = false
-            }
-        }
-    }
-
-    fun selectRepo(repo: GitHubRepo?) {
-        _selectedRepo.value = repo
-        if (repo != null) {
-            val owner = repo.full_name.substringBefore("/")
-            fetchRepoReleases(owner, repo.name)
-        } else {
-            _releasesList.value = emptyList()
-        }
-    }
-
-    fun downloadApk(asset: GitHubAsset, repoName: String) {
+    // Load game from database
+    private fun loadGame() {
         viewModelScope.launch(Dispatchers.IO) {
-            _downloadProgress.value = 0f
-            _downloadingAssetName.value = asset.name
-            _downloadError.value = null
-            _downloadSuccessMessage.value = null
-            addLog("GITHUB", "Starting download: ${asset.name} (${String.format("%.2f", asset.size / (1024.0 * 1024.0))} MB)", "INFO")
+            val state = dao.getGameState()
+            withContext(Dispatchers.Main) {
+                if (state != null) {
+                    _currentCookies.value = state.currentCookies
+                    _totalCookiesBaked.value = state.totalCookiesBaked
+                    _totalClicks.value = state.totalClicks
 
-            try {
-                val url = asset.browser_download_url
-                val client = OkHttpClient()
-                val request = okhttp3.Request.Builder()
-                    .url(url)
-                    .apply {
-                        val token = _githubToken.value
-                        if (token.isNotEmpty()) {
-                            addHeader("Authorization", "token $token")
+                    // Reload upgrade counts
+                    _upgrades.value = _upgrades.value.map { upgrade ->
+                        when (upgrade.id) {
+                            "click_spatula" -> upgrade.copy(count = state.plasticSpatulaCount)
+                            "click_pin" -> upgrade.copy(count = state.goldenRollingPinCount)
+                            "click_engine" -> upgrade.copy(count = state.chocolateEngineCount)
+                            "click_oven" -> upgrade.copy(count = state.cosmicOvenCount)
+                            "cps_cursor" -> upgrade.copy(count = state.cursorCount)
+                            "cps_grandma" -> upgrade.copy(count = state.grandmaCount)
+                            "cps_bakery" -> upgrade.copy(count = state.bakeryCount)
+                            "cps_factory" -> upgrade.copy(count = state.factoryCount)
+                            "cps_portal" -> upgrade.copy(count = state.portalCount)
+                            "cps_time" -> upgrade.copy(count = state.timeMachineCount)
+                            else -> upgrade
                         }
                     }
-                    .build()
 
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    throw Exception("Failed: HTTP ${response.code} ${response.message}")
-                }
+                    // Reload achievements
+                    val unlockedSet = state.unlockedAchievements.split(",").filter { it.isNotEmpty() }.toSet()
+                    _achievements.value = _achievements.value.map { ach ->
+                        if (unlockedSet.contains(ach.id)) ach.copy(isUnlocked = true) else ach
+                    }
 
-                val body = response.body ?: throw Exception("Empty response body")
-                val totalBytes = body.contentLength()
-                
-                val cacheDir = getApplication<Application>().cacheDir
-                val apkFile = File(cacheDir, asset.name)
-                if (apkFile.exists()) {
-                    apkFile.delete()
-                }
-
-                val inputStream = body.byteStream()
-                val outputStream = FileOutputStream(apkFile)
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                var totalBytesRead = 0L
-
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                    totalBytesRead += bytesRead
-                    if (totalBytes > 0) {
-                        _downloadProgress.value = totalBytesRead.toFloat() / totalBytes.toFloat()
+                    // Calculate Offline Earnings
+                    val timePassedMs = System.currentTimeMillis() - state.lastSavedTime
+                    val timePassedSec = timePassedMs / 1000
+                    if (timePassedSec > 10) { // Only calculate if offline more than 10 seconds
+                        val baseCps = getCookiesPerSecond()
+                        if (baseCps > 0) {
+                            val earned = baseCps * timePassedSec
+                            _currentCookies.value += earned
+                            _totalCookiesBaked.value += earned
+                            _offlineEarnings.value = earned
+                            _offlineSeconds.value = timePassedSec
+                        }
                     }
                 }
-
-                outputStream.write(buffer, 0, 0) // Ensure stream flushed correctly
-                outputStream.flush()
-                outputStream.close()
-                inputStream.close()
-
-                _downloadProgress.value = null
-                _downloadingAssetName.value = null
-                _downloadedApkFileUri.value = apkFile.absolutePath
-                _downloadSuccessMessage.value = "Successfully downloaded ${asset.name}!"
-                addLog("GITHUB", "Completed download of ${asset.name}. Saved to: ${apkFile.absolutePath}", "SUCCESS")
-                sendNativeNotification("APK Download Completed", "Downloaded ${asset.name} successfully. Tap to emulate/install.")
-            } catch (e: Exception) {
-                _downloadProgress.value = null
-                _downloadingAssetName.value = null
-                _downloadError.value = e.message ?: "Unknown download error"
-                addLog("GITHUB", "Download failed: ${e.message}", "ERROR")
             }
         }
     }
 
-    fun installApk(context: Context, filePath: String) {
-        try {
-            val file = File(filePath)
-            if (!file.exists()) {
-                addLog("GITHUB", "Installation failed: File not found at $filePath", "ERROR")
-                return
+    // Save game to database
+    fun saveGame() {
+        val currentSpatula = _upgrades.value.firstOrNull { it.id == "click_spatula" }?.count ?: 0
+        val currentPin = _upgrades.value.firstOrNull { it.id == "click_pin" }?.count ?: 0
+        val currentEngine = _upgrades.value.firstOrNull { it.id == "click_engine" }?.count ?: 0
+        val currentOven = _upgrades.value.firstOrNull { it.id == "click_oven" }?.count ?: 0
+
+        val currentCursor = _upgrades.value.firstOrNull { it.id == "cps_cursor" }?.count ?: 0
+        val currentGrandma = _upgrades.value.firstOrNull { it.id == "cps_grandma" }?.count ?: 0
+        val currentBakery = _upgrades.value.firstOrNull { it.id == "cps_bakery" }?.count ?: 0
+        val currentFactory = _upgrades.value.firstOrNull { it.id == "cps_factory" }?.count ?: 0
+        val currentPortal = _upgrades.value.firstOrNull { it.id == "cps_portal" }?.count ?: 0
+        val currentTimeMachine = _upgrades.value.firstOrNull { it.id == "cps_time" }?.count ?: 0
+
+        val unlockedString = _achievements.value
+            .filter { it.isUnlocked }
+            .joinToString(",") { it.id }
+
+        val gameState = GameState(
+            id = 1,
+            currentCookies = _currentCookies.value,
+            totalCookiesBaked = _totalCookiesBaked.value,
+            totalClicks = _totalClicks.value,
+            lastSavedTime = System.currentTimeMillis(),
+            plasticSpatulaCount = currentSpatula,
+            goldenRollingPinCount = currentPin,
+            chocolateEngineCount = currentEngine,
+            cosmicOvenCount = currentOven,
+            cursorCount = currentCursor,
+            grandmaCount = currentGrandma,
+            bakeryCount = currentBakery,
+            factoryCount = currentFactory,
+            portalCount = currentPortal,
+            timeMachineCount = currentTimeMachine,
+            unlockedAchievements = unlockedString
+        )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.insertGameState(gameState)
+        }
+    }
+
+    // Reset game completely
+    fun resetGame() {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.clearGameState()
+            withContext(Dispatchers.Main) {
+                _currentCookies.value = 0.0
+                _totalCookiesBaked.value = 0.0
+                _totalClicks.value = 0L
+                _feverActive.value = false
+                _feverSecondsRemaining.value = 0
+                _feverMultiplier.value = 1
+                setupDefaultUpgradesAndAchievements()
+                saveGame()
             }
+        }
+    }
 
-            addLog("GITHUB", "Launching Android package installer for ${file.name}", "INFO")
-            
-            val authority = "${context.packageName}.fileprovider"
-            val uri = androidx.core.content.FileProvider.getUriForFile(context, authority, file)
-            
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    // Dismiss offline earnings popup
+    fun dismissOfflinePopup() {
+        _offlineEarnings.value = null
+        _offlineSeconds.value = 0L
+    }
+
+    // Calculate core click power
+    fun getClickPower(): Double {
+        var power = 1.0
+        _upgrades.value.filter { !it.isCps }.forEach { upgrade ->
+            power += upgrade.count * upgrade.effectValue
+        }
+        if (_feverActive.value) {
+            power *= _feverMultiplier.value
+        }
+        return power
+    }
+
+    // Calculate cookies per second
+    fun getCookiesPerSecond(): Double {
+        var baseCps = 0.0
+        _upgrades.value.filter { it.isCps }.forEach { upgrade ->
+            baseCps += upgrade.count * upgrade.effectValue
+        }
+        if (_feverActive.value) {
+            baseCps *= _feverMultiplier.value
+        }
+        return baseCps
+    }
+
+    // Click the big cookie!
+    fun clickCookie() {
+        val clickPower = getClickPower()
+        _currentCookies.value += clickPower
+        _totalCookiesBaked.value += clickPower
+        _totalClicks.value += 1
+
+        // Add a floating text click indicator
+        val randX = Random.nextFloat() * 140f - 70f
+        val randY = Random.nextFloat() * 40f - 120f
+        val newText = FloatingText(
+            id = nextFloatingTextId++,
+            text = "+${formatValue(clickPower)}",
+            xOffset = randX,
+            yOffset = randY,
+            scale = if (_feverActive.value) 1.5f else 1.0f,
+            isFever = _feverActive.value
+        )
+        _floatingTexts.value = _floatingTexts.value + newText
+
+        // Automatically clean up floating text after 1 second
+        viewModelScope.launch {
+            delay(1000)
+            _floatingTexts.value = _floatingTexts.value.filter { it.id != newText.id }
+        }
+
+        checkAchievements()
+    }
+
+    // Handle buying an upgrade
+    fun buyUpgrade(upgradeId: String): Boolean {
+        val currentList = _upgrades.value
+        val upgradeIndex = currentList.indexOfFirst { it.id == upgradeId }
+        if (upgradeIndex != -1) {
+            val upgrade = currentList[upgradeIndex]
+            val cost = upgrade.currentCost
+            if (_currentCookies.value >= cost) {
+                _currentCookies.value -= cost
+                val updatedUpgrade = upgrade.copy(count = upgrade.count + 1)
+                _upgrades.value = currentList.toMutableList().apply {
+                    set(upgradeIndex, updatedUpgrade)
+                }
+                
+                checkAchievements()
+                saveGame()
+                return true
             }
-            
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            addLog("GITHUB", "Installation trigger failed: ${e.message}", "ERROR")
-            addLog("GITHUB", "Ensure you authorize the app to install packages under settings.", "WARNING")
         }
+        return false
     }
 
-    fun clearDownloadState() {
-        _downloadedApkFileUri.value = null
-        _downloadSuccessMessage.value = null
-        _downloadError.value = null
+    // Tick CpS and Fever mode
+    private fun tickGame(secondsPassed: Double) {
+        val currentCps = getCookiesPerSecond()
+        if (currentCps > 0) {
+            val gained = currentCps * secondsPassed
+            _currentCookies.value += gained
+            _totalCookiesBaked.value += gained
+        }
+
+        // Handle fever countdown
+        if (_feverActive.value) {
+            val rem = _feverSecondsRemaining.value
+            if (rem > 0) {
+                // Decay remaining timer
+                viewModelScope.launch {
+                    // Reduce by tick amount proportionally
+                }
+            }
+        }
+
+        checkAchievements()
     }
 
-    // --- Android 15 Emulator Controllers ---
-    fun setEmulatedCurrentApp(app: String?) {
-        _emulatedCurrentApp.value = app
-        if (app != null) {
-            _emulatedRecentApps.update { current ->
-                if (!current.contains(app)) current + app else current
+    // Explicit second decay for fever mode to be exact
+    init {
+        viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                if (_feverActive.value) {
+                    val remaining = _feverSecondsRemaining.value - 1
+                    if (remaining <= 0) {
+                        _feverActive.value = false
+                        _feverSecondsRemaining.value = 0
+                        _feverMultiplier.value = 1
+                    } else {
+                        _feverSecondsRemaining.value = remaining
+                    }
+                }
             }
         }
     }
 
-    fun removeEmulatedRecentApp(app: String) {
-        _emulatedRecentApps.update { current -> current - app }
-        if (_emulatedCurrentApp.value == app) {
-            _emulatedCurrentApp.value = null
+    // Golden Cookie Events
+    private fun spawnGoldenCookie() {
+        val size = Random.nextFloat() * 30f + 50f // 50 to 80 dp
+        val x = Random.nextFloat() * 0.7f + 0.15f // Keep within safe screen center bounds
+        val y = Random.nextFloat() * 0.5f + 0.2f
+        _goldenCookie.value = GoldenCookieState(
+            isVisible = true,
+            xPercent = x,
+            yPercent = y,
+            size = size
+        )
+
+        // Dissolve after 10 seconds if not clicked
+        viewModelScope.launch {
+            delay(10000)
+            if (_goldenCookie.value.isVisible) {
+                _goldenCookie.value = _goldenCookie.value.copy(isVisible = false)
+            }
         }
     }
 
-    fun clearEmulatedRecents() {
-        _emulatedRecentApps.value = emptyList()
-        _emulatedCurrentApp.value = null
-        _emulatedRecentsOpen.value = false
-    }
+    fun clickGoldenCookie() {
+        if (!_goldenCookie.value.isVisible) return
+        _goldenCookie.value = _goldenCookie.value.copy(isVisible = false)
 
-    fun toggleEmulatedWifi() {
-        _emulatedWifiOn.value = !_emulatedWifiOn.value
-        addLog("EMULATOR", "Emulated Wi-Fi toggled: ${_emulatedWifiOn.value}", "INFO")
-    }
+        // Trigger Clicking Fever! (7x multipliers for 15 seconds)
+        _feverActive.value = true
+        _feverMultiplier.value = 7
+        _feverSecondsRemaining.value = 15
 
-    fun toggleEmulatedBluetooth() {
-        _emulatedBluetoothOn.value = !_emulatedBluetoothOn.value
-        addLog("EMULATOR", "Emulated Bluetooth toggled: ${_emulatedBluetoothOn.value}", "INFO")
-    }
+        // Spawn a mega click floating text
+        val newText = FloatingText(
+            id = nextFloatingTextId++,
+            text = "FEVER MODE ACTIVE! 7X CPS & CLICK POWER!",
+            xOffset = 0f,
+            yOffset = -150f,
+            scale = 1.8f,
+            isFever = true
+        )
+        _floatingTexts.value = _floatingTexts.value + newText
 
-    fun toggleEmulatedDarkMode() {
-        _emulatedDarkModeOn.value = !_emulatedDarkModeOn.value
-        addLog("EMULATOR", "Emulated Dark Mode toggled: ${_emulatedDarkModeOn.value}", "INFO")
-    }
+        // Unlock achievement
+        unlockAchievement("ach_golden")
 
-    fun toggleEmulatedFlashlight() {
-        _emulatedFlashlightOn.value = !_emulatedFlashlightOn.value
-        addLog("EMULATOR", "Emulated Flashlight toggled: ${_emulatedFlashlightOn.value}", "INFO")
-    }
-
-    fun toggleEmulatedBatterySaver() {
-        _emulatedBatterySaverOn.value = !_emulatedBatterySaverOn.value
-        addLog("EMULATOR", "Emulated Battery Saver toggled: ${_emulatedBatterySaverOn.value}", "INFO")
-    }
-
-    fun setEmulatedNotificationDrawerOpen(open: Boolean) {
-        _emulatedNotificationDrawerOpen.value = open
-    }
-
-    fun setEmulatedBrowserUrl(url: String) {
-        _emulatedBrowserUrl.value = url
-    }
-
-    fun setEmulatedSettingsSection(section: String) {
-        _emulatedSettingsSection.value = section
-    }
-
-    fun setEmulatedRecentsOpen(open: Boolean) {
-        _emulatedRecentsOpen.value = open
-    }
-
-    fun installAppInEmulator(appName: String) {
-        _emulatedInstalledApps.update { current ->
-            if (!current.contains(appName)) current + appName else current
+        viewModelScope.launch {
+            delay(2500)
+            _floatingTexts.value = _floatingTexts.value.filter { it.id != newText.id }
         }
-        addLog("EMULATOR", "Successfully installed app in emulator: $appName", "SUCCESS")
     }
 
-    private fun clamp(value: Int, min: Int, max: Int): Int {
-        return if (value < min) min else if (value > max) max else value
+    // Add cookie count to history for line graph
+    private fun updateHistory() {
+        val currentHistory = _productionHistory.value.toMutableList()
+        currentHistory.removeAt(0)
+        currentHistory.add(_currentCookies.value)
+        _productionHistory.value = currentHistory
     }
 
-    private fun clampDouble(value: Double, min: Double, max: Double): Double {
-        return if (value < min) min else if (value > max) max else value
+    // Check and unlock achievements
+    private fun checkAchievements() {
+        val totalBaked = _totalCookiesBaked.value
+        val clicks = _totalClicks.value
+
+        if (totalBaked >= 1.0) unlockAchievement("ach_first")
+        if (totalBaked >= 100.0) unlockAchievement("ach_100")
+        if (totalBaked >= 10000.0) unlockAchievement("ach_10k")
+        if (totalBaked >= 1000000.0) unlockAchievement("ach_1m")
+
+        if (clicks >= 50) unlockAchievement("ach_clicks_50")
+        if (clicks >= 500) unlockAchievement("ach_clicks_500")
+
+        val currentGrandmas = _upgrades.value.firstOrNull { it.id == "cps_grandma" }?.count ?: 0
+        if (currentGrandmas >= 5) unlockAchievement("ach_grandmas_5")
+
+        val currentFactories = _upgrades.value.firstOrNull { it.id == "cps_factory" }?.count ?: 0
+        if (currentFactories >= 3) unlockAchievement("ach_factories_3")
+    }
+
+    private fun unlockAchievement(id: String) {
+        val currentList = _achievements.value
+        val achIndex = currentList.indexOfFirst { it.id == id }
+        if (achIndex != -1) {
+            val ach = currentList[achIndex]
+            if (!ach.isUnlocked) {
+                _achievements.value = currentList.toMutableList().apply {
+                    set(achIndex, ach.copy(isUnlocked = true))
+                }
+                // Save immediately
+                saveGame()
+            }
+        }
+    }
+
+    // Formatting utility helper
+    fun formatValue(value: Double): String {
+        return when {
+            value >= 1_000_000_000 -> String.format("%.2f B", value / 1_000_000_000.0)
+            value >= 1_000_000 -> String.format("%.2f M", value / 1_000_000.0)
+            value >= 1_000 -> String.format("%.1f K", value / 1_000.0)
+            else -> String.format("%.0f", value)
+        }
     }
 }
-
-data class ConsoleLog(
-    val timestamp: Long,
-    val tag: String,
-    val message: String,
-    val level: String // "DEBUG", "INFO", "WARNING", "ERROR"
-)

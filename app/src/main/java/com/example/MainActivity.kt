@@ -10,9 +10,6 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,9 +18,11 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -59,9 +58,9 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
-                        .safeDrawingPadding() // Guarantees absolutely no overlap with physical notches or navigations!
+                        .safeDrawingPadding()
                         .testTag("app_root_container"),
-                    color = Color(0xFF0F172A) // Sleek Slate-Dark background
+                    color = Color(0xFF0F172A) // Slate-Dark themed background
                 ) {
                     CookieClickerMainView(gameViewModel)
                 }
@@ -72,8 +71,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CookieClickerMainView(viewModel: SystemViewModel) {
-    var activeTab by remember { mutableStateOf(0) }
-    
     val currentCookies by viewModel.currentCookies.collectAsState()
     val totalCookiesBaked by viewModel.totalCookiesBaked.collectAsState()
     val totalClicks by viewModel.totalClicks.collectAsState()
@@ -91,7 +88,27 @@ fun CookieClickerMainView(viewModel: SystemViewModel) {
     val cps = viewModel.getCookiesPerSecond()
     val clickPower = viewModel.getClickPower()
 
-    // Offline popup alert dialog
+    // Interactive button click scale
+    var isPressed by remember { mutableStateOf(false) }
+    val cookieScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1.0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "cookie_scale"
+    )
+
+    // Infinite gentle rotation for the background aura and giant cookie
+    val infiniteTransition = rememberInfiniteTransition(label = "rotation_transition")
+    val rotationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 35000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation_angle"
+    )
+
+    // Offline popup dialog
     if (offlineEarnings != null && offlineSeconds > 0) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissOfflinePopup() },
@@ -103,14 +120,14 @@ fun CookieClickerMainView(viewModel: SystemViewModel) {
             text = {
                 Column {
                     Text(
-                        "While you were away for ${viewModel.formatValue(offlineSeconds.toDouble())} seconds, your hard-working bakery produced:",
+                        "While you were away for ${viewModel.formatValue(offlineSeconds.toDouble())} seconds, your bakery cooked up:",
                         fontSize = 14.sp,
                         color = Color.LightGray
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         "${viewModel.formatValue(offlineEarnings!!)} Cookies",
-                        fontSize = 24.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Black,
                         color = Color(0xFF4FC3F7),
                         textAlign = TextAlign.Center,
@@ -123,7 +140,7 @@ fun CookieClickerMainView(viewModel: SystemViewModel) {
                     onClick = { viewModel.dismissOfflinePopup() },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00B4DB))
                 ) {
-                    Text("Awesome!", fontWeight = FontWeight.Bold)
+                    Text("Sweet!", fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = Color(0xFF1E293B),
@@ -131,688 +148,618 @@ fun CookieClickerMainView(viewModel: SystemViewModel) {
         )
     }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = Color(0xFF1E293B),
-                tonalElevation = 8.dp,
-                modifier = Modifier.clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-            ) {
-                NavigationBarItem(
-                    selected = activeTab == 0,
-                    onClick = { activeTab = 0 },
-                    icon = { Icon(Icons.Default.TouchApp, contentDescription = "Bake", modifier = Modifier.size(24.dp)) },
-                    label = { Text("Bake", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFF00B4DB),
-                        selectedTextColor = Color(0xFF00B4DB),
-                        indicatorColor = Color(0xFF334155)
-                    )
-                )
-                NavigationBarItem(
-                    selected = activeTab == 1,
-                    onClick = { activeTab = 1 },
-                    icon = { Icon(Icons.Default.Store, contentDescription = "Upgrades", modifier = Modifier.size(24.dp)) },
-                    label = { Text("Shop", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFFFFB74D),
-                        selectedTextColor = Color(0xFFFFB74D),
-                        indicatorColor = Color(0xFF334155)
-                    )
-                )
-                NavigationBarItem(
-                    selected = activeTab == 2,
-                    onClick = { activeTab = 2 },
-                    icon = { Icon(Icons.Default.Analytics, contentDescription = "Stats", modifier = Modifier.size(24.dp)) },
-                    label = { Text("Stats & Ach", fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFF81C784),
-                        selectedTextColor = Color(0xFF81C784),
-                        indicatorColor = Color(0xFF334155)
-                    )
-                )
-            }
-        },
-        containerColor = Color(0xFF0F172A)
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Top Premium Banner / Header showing Current Cookies
-            HeaderWidget(
-                currentCookies = currentCookies,
-                cps = cps,
-                feverActive = feverActive,
-                feverSeconds = feverSecondsRemaining,
-                viewModel = viewModel
-            )
-
-            // Dynamic Tab Views
-            Box(modifier = Modifier.weight(1f)) {
-                when (activeTab) {
-                    0 -> BakeTab(
-                        viewModel = viewModel,
-                        floatingTexts = floatingTexts,
-                        goldenCookie = goldenCookie,
-                        clickPower = clickPower,
-                        feverActive = feverActive
-                    )
-                    1 -> UpgradesTab(
-                        viewModel = viewModel,
-                        upgrades = upgrades,
-                        currentCookies = currentCookies
-                    )
-                    2 -> StatsTab(
-                        viewModel = viewModel,
-                        totalCookies = totalCookiesBaked,
-                        currentCookies = currentCookies,
-                        totalClicks = totalClicks,
-                        clickPower = clickPower,
-                        cps = cps,
-                        achievements = achievements,
-                        productionHistory = productionHistory
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun HeaderWidget(
-    currentCookies: Double,
-    cps: Double,
-    feverActive: Boolean,
-    feverSeconds: Int,
-    viewModel: SystemViewModel
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "🍪 COOKIE MOBILE",
-                    fontWeight = FontWeight.Black,
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.6f),
-                    letterSpacing = 2.sp
-                )
-
-                // Quick reset button for easy testing or restarting
-                IconButton(
-                    onClick = { viewModel.resetGame() },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reset Game",
-                        tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "${viewModel.formatValue(currentCookies)} Cookies",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Black,
-                color = if (feverActive) Color(0xFFFFD700) else Color(0xFF4FC3F7),
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    shadow = Shadow(
-                        color = if (feverActive) Color(0xFFFF9800).copy(alpha = 0.5f) else Color(0xFF00B4DB).copy(alpha = 0.3f),
-                        offset = Offset(2f, 2f),
-                        blurRadius = 8f
-                    )
-                )
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = "per second: ${viewModel.formatValue(cps)}",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.LightGray
-            )
-
-            // Fever indicator
-            if (feverActive) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .background(Color(0xFFE65100).copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.FlashOn, "Fever", tint = Color.Yellow, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "FEVER MODE (7X PRODUCTION): ${feverSeconds}s",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun BakeTab(
-    viewModel: SystemViewModel,
-    floatingTexts: List<FloatingText>,
-    goldenCookie: GoldenCookieState,
-    clickPower: Double,
-    feverActive: Boolean
-) {
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.90f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        finishedListener = { if (isPressed) isPressed = false }
-    )
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .drawBehind {
-                // Background radial sunburst drawing to mimic a delightful vintage gameplay environment
-                if (feverActive) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color(0xFFE65100).copy(alpha = 0.25f), Color.Transparent)
-                        ),
-                        radius = size.minDimension * 0.8f
-                    )
-                } else {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color(0xFF00B4DB).copy(alpha = 0.15f), Color.Transparent)
-                        ),
-                        radius = size.minDimension * 0.7f
-                    )
-                }
-            },
-        contentAlignment = Alignment.Center
+            .background(Color(0xFF0F172A))
     ) {
-        // Golden Cookie floating random popup
-        if (goldenCookie.isVisible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(
-                            x = (goldenCookie.xPercent * 300).dp, // safe screen bound calculation
-                            y = (goldenCookie.yPercent * 500).dp
-                        )
-                        .scale(1.2f)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            viewModel.clickGoldenCookie()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Floating Golden Cookie visual
-                    Box(
-                        modifier = Modifier
-                            .size(goldenCookie.size.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(Color(0xFFFFF176), Color(0xFFFFB300), Color(0xFFF57C00))
-                                )
-                            )
-                            .border(3.dp, Color.White, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("✨🍪✨", fontSize = 24.sp, textAlign = TextAlign.Center)
-                    }
-                }
-            }
-        }
-
-        // Giant Cookie Interactive Box
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(240.dp)
-                    .scale(scale)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null, // Disable default gray ripple so we can enjoy custom bounce animation
-                        onClick = {
-                            isPressed = true
-                            viewModel.clickCookie()
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                // Glow effect underneath giant cookie
-                Box(
-                    modifier = Modifier
-                        .size(260.dp)
-                        .drawBehind {
-                            drawCircle(
-                                color = if (feverActive) Color(0xFFFFB300).copy(alpha = 0.2f) else Color(0xFF00B4DB).copy(alpha = 0.15f),
-                                radius = size.minDimension * 0.5f
-                            )
-                        }
-                )
-
-                // The giant cookie image asset
-                Image(
-                    painter = painterResource(id = R.drawable.img_cookie),
-                    contentDescription = "Giant Cookie",
-                    modifier = Modifier
-                        .size(220.dp)
-                        .clip(CircleShape)
-                        .border(4.dp, if (feverActive) Color(0xFFFFB300) else Color(0xFF334155), CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-
-                // Float numbers box (Rendered inside the cookie region)
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    floatingTexts.forEach { ft ->
-                        Box(
-                            modifier = Modifier
-                                .offset(x = ft.xOffset.dp, y = ft.yOffset.dp)
-                        ) {
-                            Text(
-                                text = ft.text,
-                                color = if (ft.isFever) Color(0xFFFFD700) else Color.White,
-                                fontWeight = FontWeight.Black,
-                                fontSize = (22 * ft.scale).sp,
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    shadow = Shadow(
-                                        color = Color.Black,
-                                        offset = Offset(2f, 2f),
-                                        blurRadius = 6f
-                                    )
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "TAP THE COOKIE!",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (feverActive) Color(0xFFFFD700) else Color.White.copy(alpha = 0.8f),
-                letterSpacing = 1.sp
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "+${viewModel.formatValue(clickPower)} per click",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.LightGray
-            )
-        }
-    }
-}
-
-@Composable
-fun UpgradesTab(
-    viewModel: SystemViewModel,
-    upgrades: List<UpgradeItem>,
-    currentCookies: Double
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Text(
-                text = "⚡ CLICK POWER UPGRADES",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = Color(0xFFFFB74D),
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
-
-        items(upgrades.filter { !it.isCps }) { item ->
-            UpgradeCard(item = item, currentCookies = currentCookies, onBuy = { viewModel.buyUpgrade(item.id) }, viewModel = viewModel)
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "👵 AUTO-CPS BAKERS",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = Color(0xFF00B4DB),
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
-
-        items(upgrades.filter { it.isCps }) { item ->
-            UpgradeCard(item = item, currentCookies = currentCookies, onBuy = { viewModel.buyUpgrade(item.id) }, viewModel = viewModel)
-        }
-        
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-
-@Composable
-fun UpgradeCard(
-    item: UpgradeItem,
-    currentCookies: Double,
-    onBuy: () -> Unit,
-    viewModel: SystemViewModel
-) {
-    val canAfford = currentCookies >= item.currentCost
-
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (canAfford) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.5f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                1.dp,
-                if (canAfford) {
-                    if (item.isCps) Color(0xFF00B4DB).copy(alpha = 0.5f) else Color(0xFFFFB74D).copy(alpha = 0.5f)
-                } else Color.Transparent,
-                RoundedCornerShape(16.dp)
-            )
-    ) {
+        // --- 1. HEADER BANNER ---
         Row(
             modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Upgrade Emoji/Icon box
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(Color(0xFF334155), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(item.icon, fontSize = 24.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "🍪",
+                    fontSize = 28.sp,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Column {
+                    Text(
+                        text = "Cookie Clicker",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Bakery Edition",
+                        fontSize = 12.sp,
+                        color = Color(0xFF38BDF8),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
-            // Description column
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+            IconButton(
+                onClick = { viewModel.resetGame() },
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0xFF1E293B))
+                    .size(40.dp)
+                    .testTag("reset_game_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Reset Progress",
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        // --- 2. THE HERO INTERACTIVE BAKERY ZONE (Fixed) ---
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(290.dp)
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = if (feverActive) {
+                            listOf(Color(0xFF7F1D1D), Color(0xFF1E1B4B))
+                        } else {
+                            listOf(Color(0xFF1E293B), Color(0xFF0F172A))
+                        }
+                    )
+                )
+                .drawBehind {
+                    // Optional decorative radial/circular background rings
+                    drawCircle(
+                        color = if (feverActive) Color(0x1AEF4444) else Color(0x06FFFFFF),
+                        radius = size.minDimension / 1.5f,
+                        center = center
+                    )
+                    drawCircle(
+                        color = if (feverActive) Color(0x0DEF4444) else Color(0x0AFFFFFF),
+                        radius = size.minDimension / 2.2f,
+                        center = center
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // Main Content inside interactive zone
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Score Display
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = 16.dp)
                 ) {
                     Text(
-                        text = item.name,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = viewModel.formatValue(currentCookies),
+                        fontSize = 38.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (feverActive) Color(0xFFFFD700) else Color(0xFF38BDF8),
+                        style = LocalTextStyle.current.copy(
+                            shadow = Shadow(
+                                color = if (feverActive) Color(0x80D97706) else Color(0x4038BDF8),
+                                offset = Offset(2f, 4f),
+                                blurRadius = 8f
+                            )
+                        ),
+                        modifier = Modifier.testTag("cookie_score_text")
                     )
                     
-                    if (item.count > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Text(
+                            text = "cookies",
+                            color = Color.LightGray,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
                         Box(
                             modifier = Modifier
-                                .background(Color(0xFF00B4DB).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (feverActive) Color(0xFFB45309) else Color(0xFF334155))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                "x${item.count}",
-                                color = Color(0xFF4FC3F7),
-                                fontSize = 10.sp,
+                                text = "CpS: ${viewModel.formatValue(cps)}",
+                                color = Color.White,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(2.dp))
-                
-                Text(
-                    text = item.description,
-                    fontSize = 11.sp,
-                    color = Color.LightGray,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
 
-            // Price & Buy button column
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "${viewModel.formatValue(item.currentCost)} 🍪",
-                    color = if (canAfford) Color(0xFFFFB74D) else Color.Gray,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 13.sp
-                )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Button(
-                    onClick = onBuy,
-                    enabled = canAfford,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (item.isCps) Color(0xFF00B4DB) else Color(0xFFFFB74D),
-                        disabledContainerColor = Color(0xFF475569).copy(alpha = 0.3f)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(28.dp)
+                // Central clickable rotating giant cookie image
+                Box(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .scale(cookieScale)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            viewModel.clickCookie()
+                        }
+                        .drawBehind {
+                            if (feverActive) {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(Color(0x66F59E0B), Color(0x00F59E0B)),
+                                        center = center,
+                                        radius = size.width / 1.1f
+                                    )
+                                )
+                            }
+                        }
+                        .testTag("giant_cookie_button"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        "BUY",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        color = if (canAfford) Color.White else Color.Gray
+                    // Custom user image asset img_cookie.jpg as giant cookie icon
+                    Image(
+                        painter = painterResource(id = R.drawable.img_cookie),
+                        contentDescription = "Giant Cookie",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize(0.92f)
+                            .clip(CircleShape)
+                            .rotate(rotationAngle)
+                            .border(
+                                width = if (feverActive) 5.dp else 3.dp,
+                                brush = Brush.sweepGradient(
+                                    colors = if (feverActive) {
+                                        listOf(Color(0xFFFBBF24), Color(0xFFEF4444), Color(0xFFFBBF24))
+                                    } else {
+                                        listOf(Color(0xFF38BDF8), Color(0xFF0369A1), Color(0xFF38BDF8))
+                                    }
+                                ),
+                                shape = CircleShape
+                            )
                     )
                 }
-            }
-        }
-    }
-}
 
-@Composable
-fun StatsTab(
-    viewModel: SystemViewModel,
-    totalCookies: Double,
-    currentCookies: Double,
-    totalClicks: Long,
-    clickPower: Double,
-    cps: Double,
-    achievements: List<Achievement>,
-    productionHistory: List<Double>
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // 1. Real-time Production Graph
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "📈 REAL-TIME BAKERY STATS",
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4FC3F7),
-                        fontSize = 12.sp,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // High-fidelity custom live line graph
-                    LiveProductionChart(history = productionHistory)
-                    
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Live cookie production over the last 30 seconds",
-                        fontSize = 10.sp,
-                        color = Color.LightGray.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                // Bottom spacer
+                Spacer(modifier = Modifier.height(16.dp))
             }
-        }
 
-        // 2. Numerical stats
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Golden Cookie Floating Overlay Spawning
+            if (goldenCookie.isVisible) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp)
                 ) {
-                    Text(
-                        text = "📊 STATS OVERVIEW",
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFFB74D),
-                        fontSize = 12.sp,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    StatRow("Current cookies", viewModel.formatValue(currentCookies))
-                    StatRow("Total cookies baked", viewModel.formatValue(totalCookies))
-                    StatRow("Cookies per Click", viewModel.formatValue(clickPower))
-                    StatRow("Cookies per Second", viewModel.formatValue(cps))
-                    StatRow("Total giant cookie clicks", totalClicks.toString())
-                }
-            }
-        }
-
-        // 3. Achievements Title
-        item {
-            Text(
-                text = "🏆 ACHIEVEMENTS UNLOCKED (${achievements.count { it.isUnlocked }}/${achievements.size})",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = Color(0xFF81C784),
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
-        }
-
-        // 4. Achievements List
-        items(achievements.chunked(3)) { rowItems ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                for (ach in rowItems) {
-                    AchievementBadge(ach = ach, modifier = Modifier.weight(1f))
-                }
-                // Fill up remainder empty space
-                if (rowItems.size < 3) {
-                    repeat(3 - rowItems.size) {
-                        Spacer(modifier = Modifier.weight(1f))
+                    Box(
+                        modifier = Modifier
+                            .align(
+                                BiasAlignment(
+                                    horizontalBias = (goldenCookie.xPercent * 2f) - 1f,
+                                    verticalBias = (goldenCookie.yPercent * 2f) - 1f
+                                )
+                            )
+                            .size(goldenCookie.size.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color(0xFFFFD700), Color(0xFFB45309))
+                                )
+                            )
+                            .clickable {
+                                viewModel.clickGoldenCookie()
+                            }
+                            .border(2.dp, Color.White, CircleShape)
+                            .testTag("golden_cookie_floating"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✨🍪✨",
+                            fontSize = (goldenCookie.size / 3.2f).sp,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
-        }
 
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-
-@Composable
-fun LiveProductionChart(history: List<Double>) {
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(110.dp)
-            .background(Color(0xFF0F172A), RoundedCornerShape(16.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
-    ) {
-        val width = size.width
-        val height = size.height
-        val points = history
-        if (points.isNotEmpty()) {
-            val maxVal = points.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
-            val minVal = points.minOrNull() ?: 0.0
-            val range = (maxVal - minVal).coerceAtLeast(1.0)
-            
-            val path = Path()
-            points.forEachIndexed { idx, value ->
-                val x = idx * (width / (points.size - 1))
-                val y = height - ((value - minVal) / range * (height - 24f)).toFloat() - 12f
-                if (idx == 0) {
-                    path.moveTo(x, y)
-                } else {
-                    path.lineTo(x, y)
+            // Floating Click +Value text indicators
+            floatingTexts.forEach { fText ->
+                Box(
+                    modifier = Modifier
+                        .offset(x = fText.xOffset.dp, y = fText.yOffset.dp)
+                ) {
+                    Text(
+                        text = fText.text,
+                        color = if (fText.isFever) Color(0xFFFFD700) else Color.White,
+                        fontSize = (16f * fText.scale).sp,
+                        fontWeight = FontWeight.Black,
+                        style = LocalTextStyle.current.copy(
+                            shadow = Shadow(
+                                color = Color.Black,
+                                offset = Offset(1f, 2f),
+                                blurRadius = 4f
+                            )
+                        )
+                    )
                 }
             }
-            
-            // Neon cyan glowing stroke line
-            drawPath(
-                path = path,
-                color = Color(0xFF00B4DB),
-                style = Stroke(width = 3.dp.toPx())
-            )
-            
-            // Subtly shaded neon fill below
-            val fillPath = Path().apply {
-                addPath(path)
-                lineTo(width, height)
-                lineTo(0f, height)
-                close()
+
+            // Clicking Fever Screen Toast Overlay
+            if (feverActive) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 10.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFEF4444))
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "🔥 FEVER MODE! 7X ACTIVE (${feverSecondsRemaining}s)",
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp
+                    )
+                }
             }
-            drawPath(
-                path = fillPath,
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xFF00B4DB).copy(alpha = 0.25f), Color.Transparent)
+        }
+
+        // --- 3. SCROLLABLE CONTENTS (Upgrades, Achievements, Stats, Live Graph) ---
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+        ) {
+            // SECTION: Upgrades
+            item {
+                Text(
+                    text = "🛠️ Bakery Upgrades & Staff",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-            )
+            }
+
+            items(upgrades) { upgrade ->
+                val canAfford = currentCookies >= upgrade.currentCost
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = canAfford) {
+                            viewModel.buyUpgrade(upgrade.id)
+                        }
+                        .testTag("upgrade_item_${upgrade.id}"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (canAfford) Color(0xFF1E293B) else Color(0x801E293B)
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (canAfford) Color(0x6638BDF8) else Color(0x1AFFFFFF)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Emoji icon
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(if (canAfford) Color(0xFF334155) else Color(0xFF0F172A)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = upgrade.icon, fontSize = 24.sp)
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = upgrade.name,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (canAfford) Color.White else Color.Gray,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF0F172A))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "Lv. ${upgrade.count}",
+                                        color = Color(0xFF38BDF8),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            
+                            Text(
+                                text = upgrade.description,
+                                fontSize = 11.sp,
+                                color = Color.LightGray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Paid,
+                                    contentDescription = "Cost",
+                                    tint = if (canAfford) Color(0xFFFFB74D) else Color.Gray,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = viewModel.formatValue(upgrade.currentCost),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (canAfford) Color(0xFFFFB74D) else Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // SECTION: Achievements
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "🏆 Achievement Badges",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                // Render achievements as a neat flow row
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1E293B))
+                        .padding(12.dp)
+                ) {
+                    val unlockedCount = achievements.count { it.isUnlocked }
+                    Text(
+                        text = "Unlocked: $unlockedCount / ${achievements.size}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF38BDF8),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // Scrollable row of achievements inside column
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        achievements.forEach { achievement ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .testTag("achievement_badge_${achievement.id}")
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (achievement.isUnlocked) {
+                                                Brush.radialGradient(
+                                                    colors = listOf(Color(0xFFFFD700), Color(0xFFB45309))
+                                                )
+                                            } else {
+                                                Brush.linearGradient(
+                                                    colors = listOf(Color(0xFF334155), Color(0xFF1E293B))
+                                                )
+                                            }
+                                        )
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = if (achievement.isUnlocked) Color(0xFFFFD700) else Color.Transparent,
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = achievement.icon,
+                                        fontSize = 20.sp,
+                                        modifier = Modifier.scale(if (achievement.isUnlocked) 1.0f else 0.8f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = achievement.title,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (achievement.isUnlocked) Color.White else Color.Gray,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // SECTION: Live Production Graph
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "📈 Live Production History",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Baking Rate (Interval Stats)",
+                            fontSize = 11.sp,
+                            color = Color.LightGray,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        // Custom drawing graph
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .background(Color(0xFF0F172A), RoundedCornerShape(10.dp))
+                        ) {
+                            val width = size.width
+                            val height = size.height
+
+                            // Draw subtle gridlines
+                            val gridLinesCount = 4
+                            for (i in 1 until gridLinesCount) {
+                                val y = height * i / gridLinesCount
+                                drawLine(
+                                    color = Color(0x11FFFFFF),
+                                    start = Offset(0f, y),
+                                    end = Offset(width, y),
+                                    strokeWidth = 1f
+                                )
+                            }
+
+                            if (productionHistory.isNotEmpty()) {
+                                val maxVal = productionHistory.maxOrNull()?.coerceAtLeast(10.0) ?: 10.0
+                                val minVal = productionHistory.minOrNull() ?: 0.0
+                                val range = (maxVal - minVal).coerceAtLeast(1.0)
+
+                                val path = Path()
+                                val points = productionHistory.mapIndexed { index, value ->
+                                    val x = width * index / (productionHistory.size - 1)
+                                    val ratio = (value - minVal) / range
+                                    val y = height - (ratio.toFloat() * (height - 16f) + 8f)
+                                    Offset(x, y)
+                                }
+
+                                // Connect line path
+                                points.forEachIndexed { index, point ->
+                                    if (index == 0) {
+                                        path.moveTo(point.x, point.y)
+                                    } else {
+                                        path.lineTo(point.x, point.y)
+                                    }
+                                }
+
+                                // Draw line
+                                drawPath(
+                                    path = path,
+                                    color = Color(0xFF38BDF8),
+                                    style = Stroke(width = 4f)
+                                )
+
+                                // Fill area under path
+                                val fillPath = Path().apply {
+                                    addPath(path)
+                                    lineTo(width, height)
+                                    lineTo(0f, height)
+                                    close()
+                                }
+                                drawPath(
+                                    path = fillPath,
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color(0x3338BDF8), Color(0x0038BDF8))
+                                    )
+                                )
+
+                                // Draw glowing dot on the last coordinate
+                                points.lastOrNull()?.let { lastPoint ->
+                                    drawCircle(
+                                        color = Color.White,
+                                        radius = 6f,
+                                        center = lastPoint
+                                    )
+                                    drawCircle(
+                                        color = Color(0x8038BDF8),
+                                        radius = 12f,
+                                        center = lastPoint
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // SECTION: Game Statistics
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "📊 General Stats",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        StatRow("Total Cookies Baked", viewModel.formatValue(totalCookiesBaked))
+                        StatRow("Total Manual Clicks", viewModel.formatValue(totalClicks.toDouble()))
+                        StatRow("Base Click Power", viewModel.formatValue(clickPower))
+                        StatRow("Passive Auto-CpS", viewModel.formatValue(cps))
+                    }
+                }
+            }
         }
     }
 }
@@ -821,76 +768,10 @@ fun LiveProductionChart(history: List<Double>) {
 fun StatRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, color = Color.LightGray, fontSize = 13.sp)
-        Text(value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-    }
-}
-
-@Composable
-fun AchievementBadge(ach: Achievement, modifier: Modifier = Modifier) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (ach.isUnlocked) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier
-            .height(115.dp)
-            .border(
-                1.dp,
-                if (ach.isUnlocked) Color(0xFF81C784).copy(alpha = 0.4f) else Color.White.copy(alpha = 0.05f),
-                RoundedCornerShape(16.dp)
-            )
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(8.dp)
-                .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(
-                        if (ach.isUnlocked) Color(0xFF2E7D32).copy(alpha = 0.2f) else Color(0xFF334155).copy(alpha = 0.3f),
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = ach.icon,
-                    fontSize = 18.sp,
-                    modifier = Modifier.drawBehind {
-                        if (!ach.isUnlocked) {
-                            // Subtle grayscale draw
-                        }
-                    }
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(6.dp))
-            
-            Text(
-                text = ach.title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp,
-                color = if (ach.isUnlocked) Color.White else Color.Gray,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            
-            Text(
-                text = ach.description,
-                fontSize = 8.sp,
-                color = if (ach.isUnlocked) Color.LightGray else Color.Gray.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                lineHeight = 10.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(text = label, color = Color.LightGray, fontSize = 13.sp)
+        Text(text = value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }

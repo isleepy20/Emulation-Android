@@ -21,7 +21,7 @@ This is the fastest, safest, and most reliable method:
 To download directly from the official repository:
 1. Navigate to the official file page on GitHub:
    👉 **[Click Here to open CookieClicker.apk on GitHub](https://github.com/isleepy20/Emulation-Android/blob/main/CookieClicker.apk)**
-2. Tap the **"Download"** button on that page.
+2. Tap the blue **"View raw"** link (or the **"Download"** button if on desktop). This will download the actual `CookieClicker.apk` file directly to your device! (GitHub says it can't show the file because it is a binary app, which is completely normal).
 
 ---
 

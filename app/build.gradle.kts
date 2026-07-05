@@ -76,6 +76,61 @@ base {
   archivesName.set("CookieClicker")
 }
 
+abstract class CopyApkTask : DefaultTask() {
+    @get:Internal
+    abstract val buildOutputsDir: DirectoryProperty
+
+    @get:Internal
+    abstract val rootDir: DirectoryProperty
+
+    @get:Internal
+    abstract val buildOutputsDest: DirectoryProperty
+
+    @TaskAction
+    fun copyApk() {
+        val buildOutputsDirFile = buildOutputsDir.get().asFile
+        val rootDirFile = rootDir.get().asFile
+        val buildOutputsDestFile = buildOutputsDest.get().asFile
+        
+        if (buildOutputsDirFile.exists()) {
+            val apkFiles = buildOutputsDirFile.walkTopDown()
+                .filter { it.isFile && it.extension == "apk" && !it.name.contains("unsigned") }
+                .toList()
+            val debugApk = apkFiles.find { it.name.contains("debug") }
+            val releaseApk = apkFiles.find { it.name.contains("release") }
+            val targetApk = debugApk ?: releaseApk ?: apkFiles.firstOrNull()
+            if (targetApk != null) {
+                // Copy to root directory
+                targetApk.copyTo(File(rootDirFile, "CookieClicker.apk"), overwrite = true)
+                println("Successfully copied compiled APK to project root -> CookieClicker.apk")
+                
+                // Copy to .build-outputs directory
+                if (!buildOutputsDestFile.exists()) {
+                    buildOutputsDestFile.mkdirs()
+                }
+                targetApk.copyTo(File(buildOutputsDestFile, "CookieClicker.apk"), overwrite = true)
+                targetApk.copyTo(File(buildOutputsDestFile, "android-15.apk"), overwrite = true)
+                targetApk.copyTo(File(buildOutputsDestFile, "app-debug.apk"), overwrite = true)
+                println("Successfully synchronized compiled APK with .build-outputs/ directory.")
+            } else {
+                println("No compiled APK found under build/outputs/apk/ to copy to root.")
+            }
+        } else {
+            println("build/outputs/apk directory does not exist yet.")
+        }
+    }
+}
+
+tasks.register<CopyApkTask>("copyApkToRoot") {
+    buildOutputsDir.set(layout.buildDirectory.dir("outputs/apk"))
+    rootDir.set(layout.projectDirectory.dir("../"))
+    buildOutputsDest.set(layout.projectDirectory.dir("../.build-outputs"))
+}
+
+tasks.matching { it.name.startsWith("assemble") }.configureEach {
+    finalizedBy("copyApkToRoot")
+}
+
 
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.

@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/img_cookie"
+        android:drawable="@drawable/img_app_icon_1783241159765"
         android:gravity="center" />
 </layer-list>
